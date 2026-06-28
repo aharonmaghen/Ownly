@@ -127,12 +127,22 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
 }));
 
 async function fetchHousehold(): Promise<Household | null> {
-  const { data } = await supabase
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+
+  const { data: member } = await supabase
     .from('household_members')
-    .select('household_id, households(id, name, invite_code)')
+    .select('household_id')
+    .eq('user_id', user.id)
     .single();
-  if (!data) return null;
-  const hh = (data as any).households;
+  if (!member) return null;
+
+  const { data: hh } = await supabase
+    .from('households')
+    .select('id, name, invite_code')
+    .eq('id', member.household_id)
+    .single();
   if (!hh) return null;
+
   return { id: hh.id, name: hh.name, inviteCode: hh.invite_code };
 }

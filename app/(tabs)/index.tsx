@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSettingsStore } from '../../src/store/settingsStore';
 import { useTranslation } from '../../src/hooks/useTranslation';
 import { useRTL } from '../../src/hooks/useRTL';
+import { useScreenHeight } from '../../src/hooks/useScreenHeight';
 import { CFSBanner } from '../../src/components/dashboard/NetWorthBanner';
 import { RecentTransactions } from '../../src/components/dashboard/RecentTransactions';
 import { AddExpenseModal } from '../../src/components/modals/AddExpenseModal';
@@ -16,6 +17,7 @@ type ModalType = 'expense' | 'income' | 'adjust' | null;
 export default function DashboardScreen() {
   const { t } = useTranslation();
   const { isRTL, row, textAlign } = useRTL();
+  const screenHeight = useScreenHeight();
   const { settings, setLanguage } = useSettingsStore();
   const [activeModal, setActiveModal] = useState<ModalType>(null);
 
@@ -24,7 +26,7 @@ export default function DashboardScreen() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-surface">
+    <SafeAreaView className="bg-surface" style={{ height: screenHeight, flex: screenHeight ? undefined : 1 }}>
       {/* App bar */}
       <View
         className="flex-row items-center justify-between px-4 pt-2 pb-3 bg-brand-700"
@@ -42,7 +44,7 @@ export default function DashboardScreen() {
       </View>
 
       <ScrollView
-        className="flex-1"
+        style={{ flex: 1 }}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 120 }}
       >

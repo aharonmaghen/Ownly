@@ -35,6 +35,7 @@ export default function TabLayout() {
           fontSize: 11,
           fontWeight: '600',
         },
+        sceneStyle: { flex: 1 },
       }}
     >
       {ordered.map((tab) => (
