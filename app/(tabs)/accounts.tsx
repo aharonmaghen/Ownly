@@ -10,6 +10,7 @@ import { useBudgetStore } from '../../src/store/budgetStore';
 import { useTranslation } from '../../src/hooks/useTranslation';
 import { useCurrency } from '../../src/hooks/useCurrency';
 import { useRTL } from '../../src/hooks/useRTL';
+import { useScreenHeight } from '../../src/hooks/useScreenHeight';
 import { ProgressBar } from '../../src/components/ui/ProgressBar';
 import { AmountInput } from '../../src/components/ui/AmountInput';
 import { Button } from '../../src/components/ui/Button';
@@ -32,6 +33,7 @@ export default function BudgetScreen() {
   const { t } = useTranslation();
   const { format } = useCurrency();
   const { row, textAlign } = useRTL();
+  const screenHeight = useScreenHeight();
   const categories   = useBudgetStore((s) => s.categories);
   const monthlySpent = useBudgetStore(useShallow((s) => s.getMonthlySpentByCategory()));
   const { addCategory, updateCategory, deleteCategory } = useBudgetStore();
@@ -74,7 +76,7 @@ export default function BudgetScreen() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-surface">
+    <SafeAreaView className="bg-surface" style={{ height: screenHeight, flex: screenHeight ? undefined : 1 }}>
       {/* Header */}
       <View
         className="flex-row items-center justify-between px-4 py-3 bg-white border-b border-slate-100"
@@ -91,7 +93,7 @@ export default function BudgetScreen() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 32 }}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 32 }}>
         {/* Monthly summary strip */}
         <View className="flex-row gap-3 mx-4 mt-4 mb-2" style={{ flexDirection: row }}>
           <SummaryCard label={t('budget.totalBudget')} value={format(totalMonthlyLimit)} color="#0284c7" />
@@ -152,84 +154,86 @@ export default function BudgetScreen() {
       </ScrollView>
 
       {/* Add Category Sheet */}
-      <Modal visible={showAddForm} animationType="slide" transparent presentationStyle="pageSheet">
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} className="flex-1">
-          <View className="flex-1 justify-end">
-            <View className="bg-white rounded-t-3xl pt-3 pb-10 px-5">
-              <View className="w-10 h-1 bg-slate-300 rounded-full self-center mb-4" />
-              <Text className="text-xl font-bold text-slate-800 mb-4" style={{ textAlign }}>
-                {t('budget.addTitle')}
-              </Text>
+      {showAddForm && (
+        <Modal visible animationType="slide" transparent presentationStyle="pageSheet">
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} className="flex-1">
+            <View className="flex-1 justify-end">
+              <View className="bg-white rounded-t-3xl pt-3 pb-10 px-5">
+                <View className="w-10 h-1 bg-slate-300 rounded-full self-center mb-4" />
+                <Text className="text-xl font-bold text-slate-800 mb-4" style={{ textAlign }}>
+                  {t('budget.addTitle')}
+                </Text>
 
-              <Text className="text-sm font-medium text-slate-600 mb-1">{t('budget.name')}</Text>
-              <TextInput
-                value={name}
-                onChangeText={setName}
-                placeholder={t('budget.namePlaceholder')}
-                placeholderTextColor="#94a3b8"
-                className="border border-slate-200 rounded-xl px-3 py-2 bg-slate-50 text-slate-800 mb-1"
-              />
-              {errors.name && <Text className="text-expense text-xs mb-2">{errors.name}</Text>}
+                <Text className="text-sm font-medium text-slate-600 mb-1">{t('budget.name')}</Text>
+                <TextInput
+                  value={name}
+                  onChangeText={setName}
+                  placeholder={t('budget.namePlaceholder')}
+                  placeholderTextColor="#94a3b8"
+                  className="border border-slate-200 rounded-xl px-3 py-2 bg-slate-50 text-slate-800 mb-1"
+                />
+                {errors.name && <Text className="text-expense text-xs mb-2">{errors.name}</Text>}
 
-              <AmountInput value={limit} onChangeText={setLimit} label={t('budget.limit')} error={errors.limit} />
+                <AmountInput value={limit} onChangeText={setLimit} label={t('budget.limit')} error={errors.limit} />
 
-              {/* Icon picker */}
-              <Text className="text-sm font-medium text-slate-600 mb-2">{t('budget.icon')}</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-3">
-                <View className="flex-row gap-2">
-                  {ICON_OPTIONS.map((ic) => (
+                <Text className="text-sm font-medium text-slate-600 mb-2">{t('budget.icon')}</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-3">
+                  <View className="flex-row gap-2">
+                    {ICON_OPTIONS.map((ic) => (
+                      <TouchableOpacity
+                        key={ic}
+                        onPress={() => setIcon(ic)}
+                        className="w-10 h-10 rounded-xl items-center justify-center border"
+                        style={{ borderColor: icon === ic ? color : '#e2e8f0', backgroundColor: icon === ic ? color + '18' : '#f8fafc' }}
+                      >
+                        <Ionicons name={ic as any} size={20} color={icon === ic ? color : '#94a3b8'} />
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </ScrollView>
+
+                <Text className="text-sm font-medium text-slate-600 mb-2">{t('budget.color')}</Text>
+                <View className="flex-row flex-wrap gap-2 mb-5">
+                  {COLOR_OPTIONS.map((c) => (
                     <TouchableOpacity
-                      key={ic}
-                      onPress={() => setIcon(ic)}
-                      className="w-10 h-10 rounded-xl items-center justify-center border"
-                      style={{ borderColor: icon === ic ? color : '#e2e8f0', backgroundColor: icon === ic ? color + '18' : '#f8fafc' }}
-                    >
-                      <Ionicons name={ic as any} size={20} color={icon === ic ? color : '#94a3b8'} />
-                    </TouchableOpacity>
+                      key={c}
+                      onPress={() => setColor(c)}
+                      className="w-8 h-8 rounded-full"
+                      style={{ backgroundColor: c, borderWidth: color === c ? 3 : 0, borderColor: '#fff', shadowColor: c, shadowOpacity: color === c ? 0.5 : 0, shadowRadius: 4, elevation: color === c ? 4 : 0 }}
+                    />
                   ))}
                 </View>
-              </ScrollView>
 
-              {/* Color picker */}
-              <Text className="text-sm font-medium text-slate-600 mb-2">{t('budget.color')}</Text>
-              <View className="flex-row flex-wrap gap-2 mb-5">
-                {COLOR_OPTIONS.map((c) => (
-                  <TouchableOpacity
-                    key={c}
-                    onPress={() => setColor(c)}
-                    className="w-8 h-8 rounded-full"
-                    style={{ backgroundColor: c, borderWidth: color === c ? 3 : 0, borderColor: '#fff', shadowColor: c, shadowOpacity: color === c ? 0.5 : 0, shadowRadius: 4, elevation: color === c ? 4 : 0 }}
-                  />
-                ))}
-              </View>
-
-              <View className="flex-row gap-3">
-                <Button label={t('misc.cancel')} variant="secondary" onPress={() => { setShowAddForm(false); setErrors({}); }} style={{ flex: 1 }} />
-                <Button label={t('misc.add')} variant="primary" onPress={handleAdd} style={{ flex: 1 }} />
+                <View className="flex-row gap-3">
+                  <Button label={t('misc.cancel')} variant="secondary" onPress={() => { setShowAddForm(false); setErrors({}); }} style={{ flex: 1 }} />
+                  <Button label={t('misc.add')} variant="primary" onPress={handleAdd} style={{ flex: 1 }} />
+                </View>
               </View>
             </View>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
+          </KeyboardAvoidingView>
+        </Modal>
+      )}
 
       {/* Edit Limit Sheet */}
-      <Modal visible={!!editingCategory} animationType="slide" transparent presentationStyle="pageSheet">
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} className="flex-1">
-          <View className="flex-1 justify-end">
-            <View className="bg-white rounded-t-3xl pt-3 pb-10 px-5">
-              <View className="w-10 h-1 bg-slate-300 rounded-full self-center mb-4" />
-              <Text className="text-xl font-bold text-slate-800 mb-4">
-                {t('budget.editTitle')}{editingCategory ? ` — ${editingCategory.name}` : ''}
-              </Text>
-              <AmountInput value={newLimit} onChangeText={setNewLimit} label={t('budget.limit')} autoFocus />
-              <View className="flex-row gap-3 mt-2">
-                <Button label={t('misc.cancel')} variant="secondary" onPress={() => setEditingCategory(null)} style={{ flex: 1 }} />
-                <Button label={t('misc.save')} variant="primary" onPress={handleUpdateLimit} style={{ flex: 1 }} />
+      {!!editingCategory && (
+        <Modal visible animationType="slide" transparent presentationStyle="pageSheet">
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} className="flex-1">
+            <View className="flex-1 justify-end">
+              <View className="bg-white rounded-t-3xl pt-3 pb-10 px-5">
+                <View className="w-10 h-1 bg-slate-300 rounded-full self-center mb-4" />
+                <Text className="text-xl font-bold text-slate-800 mb-4">
+                  {t('budget.editTitle')}{editingCategory ? ` — ${editingCategory.name}` : ''}
+                </Text>
+                <AmountInput value={newLimit} onChangeText={setNewLimit} label={t('budget.limit')} autoFocus />
+                <View className="flex-row gap-3 mt-2">
+                  <Button label={t('misc.cancel')} variant="secondary" onPress={() => setEditingCategory(null)} style={{ flex: 1 }} />
+                  <Button label={t('misc.save')} variant="primary" onPress={handleUpdateLimit} style={{ flex: 1 }} />
+                </View>
               </View>
             </View>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
+          </KeyboardAvoidingView>
+        </Modal>
+      )}
     </SafeAreaView>
   );
 }

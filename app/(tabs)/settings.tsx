@@ -10,6 +10,7 @@ import { useBudgetStore } from '../../src/store/budgetStore';
 import { useAuthStore } from '../../src/store/authStore';
 import { useTranslation } from '../../src/hooks/useTranslation';
 import { useRTL } from '../../src/hooks/useRTL';
+import { useScreenHeight } from '../../src/hooks/useScreenHeight';
 import { Currency, Language } from '../../src/types';
 
 const CURRENCIES: { value: Currency; labelKey: string; symbol: string }[] = [
@@ -25,6 +26,7 @@ const LANGUAGES: { value: Language; labelKey: string }[] = [
 export default function SettingsScreen() {
   const { t } = useTranslation();
   const { row, textAlign } = useRTL();
+  const screenHeight = useScreenHeight();
   const { settings, setCurrency, setLanguage } = useSettingsStore();
   const { resetAll } = useBudgetStore();
   const { household, signOut } = useAuthStore();
@@ -51,7 +53,7 @@ export default function SettingsScreen() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-surface">
+    <SafeAreaView className="bg-surface" style={{ height: screenHeight, flex: screenHeight ? undefined : 1 }}>
       <View
         className="flex-row items-center px-4 py-3 bg-white border-b border-slate-100"
         style={{ flexDirection: row }}
@@ -61,7 +63,7 @@ export default function SettingsScreen() {
         </Text>
       </View>
 
-      <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 40 }}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 40 }}>
 
         {/* Household */}
         {household && (

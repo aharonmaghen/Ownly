@@ -7,6 +7,7 @@ import { useBudgetStore } from '../../src/store/budgetStore';
 import { useTranslation } from '../../src/hooks/useTranslation';
 import { useCurrency } from '../../src/hooks/useCurrency';
 import { useRTL } from '../../src/hooks/useRTL';
+import { useScreenHeight } from '../../src/hooks/useScreenHeight';
 import { Transaction, TransactionType } from '../../src/types';
 import { formatDate, formatTime } from '../../src/utils/date';
 
@@ -34,6 +35,7 @@ export default function HistoryScreen() {
   const { format } = useCurrency();
   const { language } = useTranslation();
   const { row, textAlign } = useRTL();
+  const screenHeight = useScreenHeight();
   const { transactions, deleteTransaction } = useBudgetStore();
   const categories = useBudgetStore((s) => s.categories);
   const envelopes  = useBudgetStore((s) => s.envelopes);
@@ -53,7 +55,7 @@ export default function HistoryScreen() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-surface">
+    <SafeAreaView className="bg-surface" style={{ height: screenHeight, flex: screenHeight ? undefined : 1 }}>
       <View className="px-4 py-3 bg-white border-b border-slate-100">
         <Text className="text-xl font-bold text-slate-800 mb-3" style={{ textAlign }}>
           {t('transactions.title')}
@@ -78,7 +80,7 @@ export default function HistoryScreen() {
         </View>
       </View>
 
-      <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 32 }}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 32 }}>
         {filtered.length === 0 ? (
           <View className="items-center mt-20">
             <Ionicons name="time-outline" size={48} color="#cbd5e1" />
