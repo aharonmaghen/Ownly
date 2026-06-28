@@ -1,149 +1,131 @@
 import React, { useState } from 'react';
 import {
-  Modal,
-  View,
-  Text,
-  ScrollView,
-  TouchableOpacity,
-  KeyboardAvoidingView,
-  Platform,
-  Alert,
+  Modal, View, Text, TextInput, TouchableOpacity,
+  KeyboardAvoidingView, Platform, ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useBudgetStore } from '../../store/budgetStore';
 import { useTranslation } from '../../hooks/useTranslation';
-import { useCurrency } from '../../hooks/useCurrency';
 import { useRTL } from '../../hooks/useRTL';
+import { useCurrency } from '../../hooks/useCurrency';
 import { AmountInput } from '../ui/AmountInput';
 import { Button } from '../ui/Button';
-import { ProgressBar } from '../ui/ProgressBar';
 import { Envelope } from '../../types';
 
-interface AllocateFundsModalProps {
+interface EnvelopeFundsModalProps {
   visible: boolean;
+  envelope: Envelope | null;
+  mode: 'deposit' | 'withdraw';
   onClose: () => void;
 }
 
-export function AllocateFundsModal({ visible, onClose }: AllocateFundsModalProps) {
+export function EnvelopeFundsModal({ visible, envelope, mode, onClose }: EnvelopeFundsModalProps) {
   const { t } = useTranslation();
   const { format } = useCurrency();
   const { isRTL, row, textAlign } = useRTL();
-  const { envelopes, unallocatedPool, allocateFunds } = useBudgetStore();
+  const { depositToEnvelope, withdrawFromEnvelope } = useBudgetStore();
 
-  const [selectedEnvelope, setSelectedEnvelope] = useState<Envelope | null>(null);
   const [amount, setAmount] = useState('');
+  const [note, setNote]     = useState('');
   const [error, setError]   = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleAllocate = async () => {
+  const handleSave = async () => {
     const num = parseFloat(amount);
     if (!num || num <= 0) { setError(t('errors.amountRequired')); return; }
-    if (!selectedEnvelope) { setError(t('errors.envelopeRequired')); return; }
-    if (num > unallocatedPool) { setError(t('errors.insufficientFunds')); return; }
+    if (mode === 'withdraw' && envelope && num > envelope.balance) {
+      setError(t('errors.insufficientFunds'));
+      return;
+    }
+    if (!envelope) return;
 
     setLoading(true);
     try {
-      allocateFunds({ amount: num, envelopeId: selectedEnvelope.id });
+      if (mode === 'deposit') {
+        depositToEnvelope({ envelopeId: envelope.id, amount: num, note: note.trim() });
+      } else {
+        withdrawFromEnvelope({ envelopeId: envelope.id, amount: num, note: note.trim() });
+      }
       resetAndClose();
-    } catch {
-      setError(t('errors.insufficientFunds'));
     } finally {
       setLoading(false);
     }
   };
 
   const resetAndClose = () => {
-    setSelectedEnvelope(null); setAmount(''); setError('');
+    setAmount(''); setNote(''); setError('');
     onClose();
   };
+
+  if (!envelope) return null;
+
+  const isDeposit = mode === 'deposit';
+  const accentColor = isDeposit ? envelope.color : '#64748b';
 
   return (
     <Modal visible={visible} animationType="slide" transparent presentationStyle="pageSheet">
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} className="flex-1">
         <View className="flex-1 justify-end">
-          <View className="bg-white rounded-t-3xl pt-3 pb-8 px-5" style={{ maxHeight: '92%' }}>
+          <View className="bg-white rounded-t-3xl pt-3 pb-8 px-5" style={{ maxHeight: '80%' }}>
             <View className="w-10 h-1 bg-slate-300 rounded-full self-center mb-4" />
 
-            <View className="flex-row items-center justify-between mb-2" style={{ flexDirection: row }}>
-              <Text className="text-xl font-bold text-slate-800" style={{ textAlign }}>
-                {t('modals.allocateFunds')}
-              </Text>
+            <View className="flex-row items-center justify-between mb-4" style={{ flexDirection: row }}>
+              <View className="flex-row items-center gap-2" style={{ flexDirection: row }}>
+                <View
+                  className="w-8 h-8 rounded-full items-center justify-center"
+                  style={{ backgroundColor: envelope.color + '22' }}
+                >
+                  <Ionicons name={envelope.icon as any} size={16} color={envelope.color} />
+                </View>
+                <Text className="text-xl font-bold text-slate-800" style={{ textAlign }}>
+                  {isDeposit ? t('modals.deposit') : t('modals.withdraw')}
+                </Text>
+              </View>
               <TouchableOpacity onPress={resetAndClose}>
                 <Ionicons name="close-circle" size={28} color="#94a3b8" />
               </TouchableOpacity>
             </View>
 
-            {/* Pool balance */}
+            {/* Current balance */}
             <View
-              className="bg-allocation/10 rounded-xl px-4 py-3 mb-4 flex-row items-center justify-between"
-              style={{ flexDirection: row }}
+              className="rounded-xl px-4 py-2.5 mb-4 flex-row items-center justify-between"
+              style={{ backgroundColor: envelope.color + '12', flexDirection: row }}
             >
-              <Text className="text-slate-500 text-sm">{t('envelopes.unallocated')}</Text>
-              <Text className="text-allocation font-bold text-lg">{format(unallocatedPool)}</Text>
+              <Text className="text-slate-500 text-sm">{envelope.name}</Text>
+              <Text className="font-bold text-base" style={{ color: envelope.color }}>
+                {format(envelope.balance)}
+              </Text>
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-              {/* Envelope list */}
-              <Text className="text-sm font-medium text-slate-600 mb-2" style={{ textAlign }}>
-                {t('modals.selectEnvelope')}
+              <AmountInput
+                value={amount}
+                onChangeText={(v) => { setAmount(v); setError(''); }}
+                label={t('transactions.amount')}
+                error={error}
+                autoFocus
+              />
+
+              <Text className="text-sm font-medium text-slate-600 mb-1 mt-2" style={{ textAlign }}>
+                {t('transactions.note')}
               </Text>
-              {envelopes.map((env) => {
-                const remaining = env.allocatedAmount - env.spentAmount;
-                const isSelected = selectedEnvelope?.id === env.id;
-                return (
-                  <TouchableOpacity
-                    key={env.id}
-                    onPress={() => { setSelectedEnvelope(env); setError(''); }}
-                    className="border rounded-xl p-3 mb-2"
-                    style={{
-                      borderColor: isSelected ? env.color : '#e2e8f0',
-                      backgroundColor: isSelected ? env.color + '10' : '#f8fafc',
-                    }}
-                  >
-                    <View className="flex-row items-center mb-1" style={{ flexDirection: row }}>
-                      <Ionicons name={env.icon as any} size={16} color={env.color} />
-                      <Text className="text-slate-800 font-semibold text-sm ml-2 flex-1" style={{ textAlign }}>
-                        {env.name}
-                      </Text>
-                      <Text className="text-xs" style={{ color: remaining < 0 ? '#ef4444' : '#64748b' }}>
-                        {format(remaining)} left
-                      </Text>
-                    </View>
-                    <ProgressBar
-                      percent={env.allocatedAmount > 0 ? (env.spentAmount / env.allocatedAmount) * 100 : 0}
-                      color={env.color}
-                      height={4}
-                    />
-                  </TouchableOpacity>
-                );
-              })}
+              <TextInput
+                value={note}
+                onChangeText={setNote}
+                placeholder={t('modals.notePlaceholder')}
+                placeholderTextColor="#94a3b8"
+                textAlign={isRTL ? 'right' : 'left'}
+                className="border border-slate-200 rounded-xl px-3 py-2.5 bg-slate-50 text-slate-800 mb-6"
+              />
 
-              {/* Amount input (shown after envelope selected) */}
-              {selectedEnvelope && (
-                <View className="mt-3">
-                  <AmountInput
-                    value={amount}
-                    onChangeText={(v) => { setAmount(v); setError(''); }}
-                    label={`${t('transactions.amount')} → ${selectedEnvelope.name}`}
-                    error={error}
-                    autoFocus
-                  />
-                </View>
-              )}
-
-              {!selectedEnvelope && error && (
-                <Text className="text-expense text-xs mb-3">{error}</Text>
-              )}
-
-              <View className="flex-row gap-3 mt-2" style={{ flexDirection: row }}>
+              <View className="flex-row gap-3" style={{ flexDirection: row }}>
                 <Button label={t('misc.cancel')} variant="secondary" onPress={resetAndClose} style={{ flex: 1 }} />
                 <Button
-                  label={t('transactions.allocate')}
+                  label={isDeposit ? t('envelopes.deposit') : t('envelopes.withdraw')}
                   variant="primary"
-                  onPress={handleAllocate}
+                  onPress={handleSave}
                   loading={loading}
-                  disabled={!selectedEnvelope}
-                  style={{ flex: 1 }}
+                  style={{ flex: 1, backgroundColor: accentColor }}
                 />
               </View>
             </ScrollView>

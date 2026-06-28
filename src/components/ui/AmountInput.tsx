@@ -30,12 +30,8 @@ export const AmountInput = forwardRef<TextInput, AmountInputProps>(
         )}
         <View
           className={`flex-row items-center border rounded-xl px-3 py-2 ${error ? 'border-expense' : 'border-slate-200'} bg-slate-50`}
-          style={{ flexDirection: isRTL ? 'row-reverse' : 'row' }}
         >
-          {/* In LTR, symbol leads; in RTL, symbol trails */}
-          {!isRTL && (
-            <Text className="text-slate-500 text-lg mr-1">{symbol}</Text>
-          )}
+          <Text className="text-slate-500 text-lg mr-1">{symbol}</Text>
           <TextInput
             ref={ref}
             value={value}
@@ -52,9 +48,6 @@ export const AmountInput = forwardRef<TextInput, AmountInputProps>(
             }}
             {...props}
           />
-          {isRTL && (
-            <Text className="text-slate-500 text-lg ml-1">{symbol}</Text>
-          )}
         </View>
         {error && (
           <Text className="text-expense text-xs mt-1" style={{ textAlign }}>

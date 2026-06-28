@@ -11,22 +11,13 @@ export function currencySymbol(currency: Currency): string {
   return SYMBOLS[currency] ?? currency;
 }
 
-export function formatAmount(
-  amount: number,
-  currency: Currency,
-  isRTL = false,
-): string {
+export function formatAmount(amount: number, currency: Currency): string {
   const sym = currencySymbol(currency);
   const abs = Math.abs(amount).toFixed(2);
-  // RTL: symbol trails the number (Hebrew convention)
-  return isRTL ? `${abs} ${sym}` : `${sym}${abs}`;
+  return `${sym}${abs}`;
 }
 
-export function formatSigned(
-  amount: number,
-  currency: Currency,
-  isRTL = false,
-): string {
+export function formatSigned(amount: number, currency: Currency): string {
   const sign = amount < 0 ? '-' : '';
-  return `${sign}${formatAmount(Math.abs(amount), currency, isRTL)}`;
+  return `${sign}${formatAmount(Math.abs(amount), currency)}`;
 }

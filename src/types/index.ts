@@ -1,49 +1,45 @@
-// ─── Account ─────────────────────────────────────────────────────────────────
+// ─── Budget Category ─────────────────────────────────────────────────────────
 
-export type AccountType = 'asset' | 'liability';
-
-export interface Account {
+export interface BudgetCategory {
   id: string;
   name: string;
-  type: AccountType;
-  balance: number;
-  icon: string;         // Ionicons name
-  color: string;        // hex color
-  createdAt: string;    // ISO 8601
+  monthlyLimit: number;
+  icon: string;
+  color: string;
+  createdAt: string;
 }
 
-// ─── Envelope ────────────────────────────────────────────────────────────────
+// ─── Envelope (savings goal) ──────────────────────────────────────────────────
 
 export interface Envelope {
   id: string;
   name: string;
+  balance: number;
+  targetAmount?: number;
   icon: string;
   color: string;
-  budgetedAmount: number;   // user-set monthly limit
-  allocatedAmount: number;  // money moved in from pool this period
-  spentAmount: number;      // total debited this period
   createdAt: string;
-}
-
-export interface EnvelopeBalance {
-  envelope: Envelope;
-  remaining: number;        // allocatedAmount - spentAmount
-  percentUsed: number;      // 0-100
 }
 
 // ─── Transaction ─────────────────────────────────────────────────────────────
 
-export type TransactionType = 'expense' | 'income' | 'allocation';
+export type TransactionType =
+  | 'income'
+  | 'expense'
+  | 'envelope_deposit'
+  | 'envelope_withdrawal'
+  | 'adjustment';
 
 export interface Transaction {
   id: string;
   type: TransactionType;
-  amount: number;           // always positive; direction implied by type
-  accountId: string;        // required for expense/income; source for allocation
-  envelopeId?: string;      // required for expense & allocation
-  notes: string;
-  timestamp: string;        // ISO 8601, user-editable
-  createdAt: string;        // immutable creation time
+  amount: number;
+  note: string;
+  categoryId?: string;           // expense only
+  envelopeId?: string;           // envelope_deposit / envelope_withdrawal
+  isNegativeAdjustment?: boolean; // adjustment: true = subtract, false = add
+  timestamp: string;
+  createdAt: string;
 }
 
 // ─── Settings ────────────────────────────────────────────────────────────────
@@ -58,13 +54,12 @@ export interface Settings {
   isRTL: boolean;
 }
 
-// ─── Derived / Aggregates ─────────────────────────────────────────────────────
+// ─── CFS Summary ─────────────────────────────────────────────────────────────
 
-export interface FinancialSummary {
-  totalAssets: number;
-  totalLiabilities: number;
-  netWorth: number;
+export interface CFSSummary {
+  cfs: number;
+  totalIncome: number;
+  totalExpenses: number;
+  totalEnvelopeBalances: number;
   monthlySpending: number;
-  monthlyIncome: number;
-  unallocatedPool: number;
 }

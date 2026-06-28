@@ -4,9 +4,19 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from '../../src/hooks/useTranslation';
 import { useRTL } from '../../src/hooks/useRTL';
 
+const TAB_CONFIGS = [
+  { name: 'index',    titleKey: 'tabs.dashboard',  icon: 'grid-outline'      },
+  { name: 'accounts', titleKey: 'tabs.budget',      icon: 'bar-chart-outline' },
+  { name: 'envelopes',titleKey: 'tabs.envelopes',   icon: 'save-outline'      },
+  { name: 'history',  titleKey: 'tabs.history',     icon: 'time-outline'      },
+  { name: 'settings', titleKey: 'settings.title',   icon: 'settings-outline'  },
+] as const;
+
 export default function TabLayout() {
   const { t } = useTranslation();
   const { isRTL } = useRTL();
+
+  const ordered = isRTL ? [...TAB_CONFIGS].reverse() : TAB_CONFIGS;
 
   return (
     <Tabs
@@ -24,46 +34,21 @@ export default function TabLayout() {
         tabBarLabelStyle: {
           fontSize: 11,
           fontWeight: '600',
-          writingDirection: isRTL ? 'rtl' : 'ltr',
         },
       }}
     >
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: t('tabs.dashboard'),
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="grid-outline" size={size} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="envelopes"
-        options={{
-          title: t('tabs.envelopes'),
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="mail-outline" size={size} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="accounts"
-        options={{
-          title: t('tabs.accounts'),
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="wallet-outline" size={size} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="history"
-        options={{
-          title: t('tabs.history'),
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="time-outline" size={size} color={color} />
-          ),
-        }}
-      />
+      {ordered.map((tab) => (
+        <Tabs.Screen
+          key={tab.name}
+          name={tab.name}
+          options={{
+            title: t(tab.titleKey),
+            tabBarIcon: ({ color, size }) => (
+              <Ionicons name={tab.icon as any} size={size} color={color} />
+            ),
+          }}
+        />
+      ))}
     </Tabs>
   );
 }

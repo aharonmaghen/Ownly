@@ -1,373 +1,371 @@
 import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import {
-  Account,
-  AccountType,
-  Envelope,
-  EnvelopeBalance,
-  FinancialSummary,
-  Transaction,
-  TransactionType,
-} from '../types';
+import { supabase } from '../lib/supabase';
+import { BudgetCategory, CFSSummary, Envelope, Transaction } from '../types';
 import { generateId } from '../utils/uuid';
 import { isCurrentMonth, now } from '../utils/date';
+import type { RealtimeChannel } from '@supabase/supabase-js';
 
-// ─── Seed data ────────────────────────────────────────────────────────────────
+// ─── DB row → domain type mappers ────────────────────────────────────────────
 
-const SEED_ACCOUNTS: Account[] = [
-  {
-    id: 'acc-checking',
-    name: 'Checking',
-    type: 'asset',
-    balance: 2500,
-    icon: 'wallet-outline',
-    color: '#0284c7',
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: 'acc-savings',
-    name: 'Savings',
-    type: 'asset',
-    balance: 8000,
-    icon: 'save-outline',
-    color: '#10b981',
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: 'acc-cc',
-    name: 'Credit Card',
-    type: 'liability',
-    balance: 1200,
-    icon: 'card-outline',
-    color: '#ef4444',
-    createdAt: new Date().toISOString(),
-  },
-];
+function toCategory(row: any): BudgetCategory {
+  return {
+    id:           row.id,
+    name:         row.name,
+    monthlyLimit: Number(row.monthly_limit),
+    icon:         row.icon,
+    color:        row.color,
+    createdAt:    row.created_at,
+  };
+}
 
-const SEED_ENVELOPES: Envelope[] = [
-  {
-    id: 'env-groceries',
-    name: 'Groceries',
-    icon: 'cart-outline',
-    color: '#f59e0b',
-    budgetedAmount: 400,
-    allocatedAmount: 400,
-    spentAmount: 120,
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: 'env-rent',
-    name: 'Rent',
-    icon: 'home-outline',
-    color: '#8b5cf6',
-    budgetedAmount: 1500,
-    allocatedAmount: 1500,
-    spentAmount: 0,
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: 'env-transport',
-    name: 'Transport',
-    icon: 'car-outline',
-    color: '#0ea5e9',
-    budgetedAmount: 200,
-    allocatedAmount: 200,
-    spentAmount: 45,
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: 'env-dining',
-    name: 'Dining Out',
-    icon: 'restaurant-outline',
-    color: '#ec4899',
-    budgetedAmount: 150,
-    allocatedAmount: 150,
-    spentAmount: 88,
-    createdAt: new Date().toISOString(),
-  },
-];
+function toEnvelope(row: any): Envelope {
+  return {
+    id:           row.id,
+    name:         row.name,
+    balance:      Number(row.balance),
+    targetAmount: row.target_amount != null ? Number(row.target_amount) : undefined,
+    icon:         row.icon,
+    color:        row.color,
+    createdAt:    row.created_at,
+  };
+}
+
+function toTransaction(row: any): Transaction {
+  return {
+    id:                   row.id,
+    type:                 row.type,
+    amount:               Number(row.amount),
+    note:                 row.note ?? '',
+    categoryId:           row.category_id  ?? undefined,
+    envelopeId:           row.envelope_id  ?? undefined,
+    isNegativeAdjustment: row.is_negative_adjustment ?? undefined,
+    timestamp:            row.timestamp,
+    createdAt:            row.created_at,
+  };
+}
 
 // ─── Store interface ──────────────────────────────────────────────────────────
 
 interface BudgetStore {
-  accounts: Account[];
-  envelopes: Envelope[];
+  categories:   BudgetCategory[];
+  envelopes:    Envelope[];
   transactions: Transaction[];
-  unallocatedPool: number;
+  loading:      boolean;
+  householdId:  string | null;
 
-  // Accounts
-  addAccount: (data: Omit<Account, 'id' | 'createdAt'>) => void;
-  updateAccount: (id: string, data: Partial<Account>) => void;
-  deleteAccount: (id: string) => void;
+  initialize(householdId: string): Promise<void>;
+  cleanup():                       void;
 
-  // Envelopes
-  addEnvelope: (data: Omit<Envelope, 'id' | 'allocatedAmount' | 'spentAmount' | 'createdAt'>) => void;
-  updateEnvelope: (id: string, data: Partial<Envelope>) => void;
-  deleteEnvelope: (id: string) => void;
+  addCategory(data: Omit<BudgetCategory, 'id' | 'createdAt'>): Promise<void>;
+  updateCategory(id: string, data: Partial<Pick<BudgetCategory, 'name' | 'monthlyLimit' | 'icon' | 'color'>>): Promise<void>;
+  deleteCategory(id: string): Promise<void>;
 
-  // Transactions
-  addExpense: (params: {
-    amount: number;
-    accountId: string;
-    envelopeId: string;
-    notes: string;
-    timestamp?: string;
-  }) => void;
+  addEnvelope(data: Omit<Envelope, 'id' | 'balance' | 'createdAt'>): Promise<void>;
+  deleteEnvelope(id: string): Promise<void>;
+  depositToEnvelope(params: { envelopeId: string; amount: number; note?: string }): Promise<void>;
+  withdrawFromEnvelope(params: { envelopeId: string; amount: number; note?: string }): Promise<void>;
 
-  addIncome: (params: {
-    amount: number;
-    accountId: string;
-    notes: string;
-    timestamp?: string;
-  }) => void;
+  addIncome(params: { amount: number; note: string; timestamp?: string }): Promise<void>;
+  addExpense(params: { amount: number; categoryId: string; note?: string; timestamp?: string }): Promise<void>;
+  addAdjustment(params: { amount: number; isNegative: boolean; note: string; timestamp?: string }): Promise<void>;
+  deleteTransaction(id: string): Promise<void>;
 
-  allocateFunds: (params: {
-    amount: number;
-    envelopeId: string;
-    notes?: string;
-    timestamp?: string;
-  }) => void;
+  resetAll(): Promise<void>;
 
-  deleteTransaction: (id: string) => void;
-
-  // Derived selectors (computed inline — no memoisation needed at this scale)
-  getFinancialSummary: () => FinancialSummary;
-  getEnvelopeBalances: () => EnvelopeBalance[];
-  getRecentTransactions: (limit?: number) => Transaction[];
-  getAccountById: (id: string) => Account | undefined;
-  getEnvelopeById: (id: string) => Envelope | undefined;
+  getCFSSummary():                CFSSummary;
+  getMonthlySpentByCategory():    Record<string, number>;
+  getRecentTransactions(n?: number): Transaction[];
+  getCategoryById(id: string):   BudgetCategory | undefined;
+  getEnvelopeById(id: string):   Envelope | undefined;
 }
+
+// ─── Realtime channel ref (outside store to avoid serialisation) ──────────────
+let _channel: RealtimeChannel | null = null;
 
 // ─── Store ────────────────────────────────────────────────────────────────────
 
-export const useBudgetStore = create<BudgetStore>()(
-  persist(
-    (set, get) => ({
-      accounts: SEED_ACCOUNTS,
-      envelopes: SEED_ENVELOPES,
-      transactions: [],
-      unallocatedPool: 253,   // seed: some money already in pool
+export const useBudgetStore = create<BudgetStore>()((set, get) => ({
+  categories:   [],
+  envelopes:    [],
+  transactions: [],
+  loading:      false,
+  householdId:  null,
 
-      // ── Accounts ──────────────────────────────────────────────────────────
+  // ── Bootstrap ───────────────────────────────────────────────────────────────
 
-      addAccount: (data) => {
-        const account: Account = {
-          ...data,
-          id: generateId(),
-          createdAt: now(),
-        };
-        set((s) => ({ accounts: [...s.accounts, account] }));
-      },
+  initialize: async (householdId) => {
+    set({ loading: true, householdId });
 
-      updateAccount: (id, data) => {
-        set((s) => ({
-          accounts: s.accounts.map((a) => (a.id === id ? { ...a, ...data } : a)),
-        }));
-      },
+    const [catsRes, envsRes, txsRes] = await Promise.all([
+      supabase.from('categories').select('*').eq('household_id', householdId).order('created_at'),
+      supabase.from('envelopes').select('*').eq('household_id', householdId).order('created_at'),
+      supabase.from('transactions').select('*').eq('household_id', householdId).order('timestamp', { ascending: false }),
+    ]);
 
-      deleteAccount: (id) => {
-        set((s) => ({
-          accounts: s.accounts.filter((a) => a.id !== id),
-        }));
-      },
+    set({
+      categories:   (catsRes.data ?? []).map(toCategory),
+      envelopes:    (envsRes.data ?? []).map(toEnvelope),
+      transactions: (txsRes.data  ?? []).map(toTransaction),
+      loading:      false,
+    });
 
-      // ── Envelopes ─────────────────────────────────────────────────────────
+    // Real-time subscriptions
+    if (_channel) supabase.removeChannel(_channel);
+    _channel = supabase
+      .channel(`household:${householdId}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'categories', filter: `household_id=eq.${householdId}` }, ({ new: row }) => {
+        const cat = toCategory(row);
+        set((s) => s.categories.some((c) => c.id === cat.id) ? s : { categories: [...s.categories, cat] });
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'categories', filter: `household_id=eq.${householdId}` }, ({ new: row }) => {
+        const cat = toCategory(row);
+        set((s) => ({ categories: s.categories.map((c) => c.id === cat.id ? cat : c) }));
+      })
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'categories', filter: `household_id=eq.${householdId}` }, ({ old }) => {
+        set((s) => ({ categories: s.categories.filter((c) => c.id !== old.id) }));
+      })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'envelopes', filter: `household_id=eq.${householdId}` }, ({ new: row }) => {
+        const env = toEnvelope(row);
+        set((s) => s.envelopes.some((e) => e.id === env.id) ? s : { envelopes: [...s.envelopes, env] });
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'envelopes', filter: `household_id=eq.${householdId}` }, ({ new: row }) => {
+        const env = toEnvelope(row);
+        set((s) => ({ envelopes: s.envelopes.map((e) => e.id === env.id ? env : e) }));
+      })
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'envelopes', filter: `household_id=eq.${householdId}` }, ({ old }) => {
+        set((s) => ({ envelopes: s.envelopes.filter((e) => e.id !== old.id) }));
+      })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'transactions', filter: `household_id=eq.${householdId}` }, ({ new: row }) => {
+        const tx = toTransaction(row);
+        set((s) => s.transactions.some((t) => t.id === tx.id) ? s : { transactions: [tx, ...s.transactions] });
+      })
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'transactions', filter: `household_id=eq.${householdId}` }, ({ old }) => {
+        set((s) => ({ transactions: s.transactions.filter((t) => t.id !== old.id) }));
+      })
+      .subscribe();
+  },
 
-      addEnvelope: (data) => {
-        const envelope: Envelope = {
-          ...data,
-          id: generateId(),
-          allocatedAmount: 0,
-          spentAmount: 0,
-          createdAt: now(),
-        };
-        set((s) => ({ envelopes: [...s.envelopes, envelope] }));
-      },
+  cleanup: () => {
+    if (_channel) { supabase.removeChannel(_channel); _channel = null; }
+    set({ categories: [], envelopes: [], transactions: [], householdId: null });
+  },
 
-      updateEnvelope: (id, data) => {
-        set((s) => ({
-          envelopes: s.envelopes.map((e) => (e.id === id ? { ...e, ...data } : e)),
-        }));
-      },
+  // ── Categories ───────────────────────────────────────────────────────────────
 
-      deleteEnvelope: (id) => {
-        set((s) => ({
-          envelopes: s.envelopes.filter((e) => e.id !== id),
-        }));
-      },
+  addCategory: async (data) => {
+    const { householdId } = get();
+    if (!householdId) return;
+    const id = generateId();
+    const optimistic: BudgetCategory = { ...data, id, createdAt: now() };
+    set((s) => ({ categories: [...s.categories, optimistic] }));
+    const { error } = await supabase.from('categories').insert({
+      id, household_id: householdId,
+      name: data.name, monthly_limit: data.monthlyLimit,
+      icon: data.icon, color: data.color,
+    });
+    if (error) set((s) => ({ categories: s.categories.filter((c) => c.id !== id) }));
+  },
 
-      // ── Expense ───────────────────────────────────────────────────────────
+  updateCategory: async (id, data) => {
+    const prev = get().categories.find((c) => c.id === id);
+    set((s) => ({ categories: s.categories.map((c) => c.id === id ? { ...c, ...data } : c) }));
+    const patch: Record<string, any> = {};
+    if (data.name         != null) patch.name          = data.name;
+    if (data.monthlyLimit != null) patch.monthly_limit = data.monthlyLimit;
+    if (data.icon         != null) patch.icon          = data.icon;
+    if (data.color        != null) patch.color         = data.color;
+    const { error } = await supabase.from('categories').update(patch).eq('id', id);
+    if (error && prev) set((s) => ({ categories: s.categories.map((c) => c.id === id ? prev : c) }));
+  },
 
-      addExpense: ({ amount, accountId, envelopeId, notes, timestamp }) => {
-        const ts = timestamp ?? now();
-        const tx: Transaction = {
-          id: generateId(),
-          type: 'expense',
-          amount,
-          accountId,
-          envelopeId,
-          notes,
-          timestamp: ts,
-          createdAt: now(),
-        };
-        set((s) => ({
-          transactions: [tx, ...s.transactions],
-          // Deduct from account balance
-          accounts: s.accounts.map((a) =>
-            a.id === accountId ? { ...a, balance: a.balance - amount } : a,
-          ),
-          // Debit from envelope spent
-          envelopes: s.envelopes.map((e) =>
-            e.id === envelopeId ? { ...e, spentAmount: e.spentAmount + amount } : e,
-          ),
-        }));
-      },
+  deleteCategory: async (id) => {
+    const prev = get().categories.find((c) => c.id === id);
+    set((s) => ({ categories: s.categories.filter((c) => c.id !== id) }));
+    const { error } = await supabase.from('categories').delete().eq('id', id);
+    if (error && prev) set((s) => ({ categories: [...s.categories, prev] }));
+  },
 
-      // ── Income ────────────────────────────────────────────────────────────
+  // ── Envelopes ────────────────────────────────────────────────────────────────
 
-      addIncome: ({ amount, accountId, notes, timestamp }) => {
-        const ts = timestamp ?? now();
-        const tx: Transaction = {
-          id: generateId(),
-          type: 'income',
-          amount,
-          accountId,
-          notes,
-          timestamp: ts,
-          createdAt: now(),
-        };
-        set((s) => ({
-          transactions: [tx, ...s.transactions],
-          // Credit asset account
-          accounts: s.accounts.map((a) =>
-            a.id === accountId ? { ...a, balance: a.balance + amount } : a,
-          ),
-          // Land in unallocated pool
-          unallocatedPool: s.unallocatedPool + amount,
-        }));
-      },
+  addEnvelope: async (data) => {
+    const { householdId } = get();
+    if (!householdId) return;
+    const id = generateId();
+    const optimistic: Envelope = { ...data, id, balance: 0, createdAt: now() };
+    set((s) => ({ envelopes: [...s.envelopes, optimistic] }));
+    const { error } = await supabase.from('envelopes').insert({
+      id, household_id: householdId,
+      name: data.name, balance: 0,
+      target_amount: data.targetAmount ?? null,
+      icon: data.icon, color: data.color,
+    });
+    if (error) set((s) => ({ envelopes: s.envelopes.filter((e) => e.id !== id) }));
+  },
 
-      // ── Allocation ────────────────────────────────────────────────────────
+  deleteEnvelope: async (id) => {
+    const prev = get().envelopes.find((e) => e.id === id);
+    set((s) => ({ envelopes: s.envelopes.filter((e) => e.id !== id) }));
+    const { error } = await supabase.from('envelopes').delete().eq('id', id);
+    if (error && prev) set((s) => ({ envelopes: [...s.envelopes, prev] }));
+  },
 
-      allocateFunds: ({ amount, envelopeId, notes = '', timestamp }) => {
-        const { unallocatedPool } = get();
-        if (amount > unallocatedPool) {
-          throw new Error('insufficient_funds');
-        }
-        const ts = timestamp ?? now();
-        const tx: Transaction = {
-          id: generateId(),
-          type: 'allocation',
-          amount,
-          accountId: '',    // pool-level, no specific account
-          envelopeId,
-          notes,
-          timestamp: ts,
-          createdAt: now(),
-        };
-        set((s) => ({
-          transactions: [tx, ...s.transactions],
-          unallocatedPool: s.unallocatedPool - amount,
-          envelopes: s.envelopes.map((e) =>
-            e.id === envelopeId
-              ? { ...e, allocatedAmount: e.allocatedAmount + amount }
-              : e,
-          ),
-        }));
-      },
+  depositToEnvelope: async ({ envelopeId, amount, note = '' }) => {
+    const { householdId } = get();
+    if (!householdId) return;
+    const txId = generateId();
+    const ts   = now();
+    // Optimistic
+    set((s) => ({
+      transactions: [{ id: txId, type: 'envelope_deposit', amount, note, envelopeId, timestamp: ts, createdAt: ts }, ...s.transactions],
+      envelopes:    s.envelopes.map((e) => e.id === envelopeId ? { ...e, balance: e.balance + amount } : e),
+    }));
+    const envelope = get().envelopes.find((e) => e.id === envelopeId);
+    const [txRes, envRes] = await Promise.all([
+      supabase.from('transactions').insert({
+        id: txId, household_id: householdId, type: 'envelope_deposit',
+        amount, note, envelope_id: envelopeId, timestamp: ts,
+      }),
+      envelope
+        ? supabase.from('envelopes').update({ balance: envelope.balance }).eq('id', envelopeId)
+        : Promise.resolve({ error: null }),
+    ]);
+    if (txRes.error) {
+      set((s) => ({
+        transactions: s.transactions.filter((t) => t.id !== txId),
+        envelopes:    s.envelopes.map((e) => e.id === envelopeId ? { ...e, balance: Math.max(0, e.balance - amount) } : e),
+      }));
+    }
+  },
 
-      // ── Delete transaction (reverse its effects) ──────────────────────────
+  withdrawFromEnvelope: async ({ envelopeId, amount, note = '' }) => {
+    const { householdId } = get();
+    if (!householdId) return;
+    const txId = generateId();
+    const ts   = now();
+    set((s) => ({
+      transactions: [{ id: txId, type: 'envelope_withdrawal', amount, note, envelopeId, timestamp: ts, createdAt: ts }, ...s.transactions],
+      envelopes:    s.envelopes.map((e) => e.id === envelopeId ? { ...e, balance: Math.max(0, e.balance - amount) } : e),
+    }));
+    const envelope = get().envelopes.find((e) => e.id === envelopeId);
+    const [txRes] = await Promise.all([
+      supabase.from('transactions').insert({
+        id: txId, household_id: householdId, type: 'envelope_withdrawal',
+        amount, note, envelope_id: envelopeId, timestamp: ts,
+      }),
+      envelope
+        ? supabase.from('envelopes').update({ balance: envelope.balance }).eq('id', envelopeId)
+        : Promise.resolve({ error: null }),
+    ]);
+    if (txRes.error) {
+      set((s) => ({
+        transactions: s.transactions.filter((t) => t.id !== txId),
+        envelopes:    s.envelopes.map((e) => e.id === envelopeId ? { ...e, balance: e.balance + amount } : e),
+      }));
+    }
+  },
 
-      deleteTransaction: (id) => {
-        const { transactions, accounts, envelopes, unallocatedPool } = get();
-        const tx = transactions.find((t) => t.id === id);
-        if (!tx) return;
+  // ── Simple transactions ───────────────────────────────────────────────────────
 
-        let nextAccounts = accounts;
-        let nextEnvelopes = envelopes;
-        let nextPool = unallocatedPool;
+  addIncome: async ({ amount, note, timestamp }) => {
+    const { householdId } = get();
+    if (!householdId) return;
+    const id = generateId();
+    const ts = timestamp ?? now();
+    const tx: Transaction = { id, type: 'income', amount, note, timestamp: ts, createdAt: ts };
+    set((s) => ({ transactions: [tx, ...s.transactions] }));
+    const { error } = await supabase.from('transactions').insert({
+      id, household_id: householdId, type: 'income', amount, note, timestamp: ts,
+    });
+    if (error) set((s) => ({ transactions: s.transactions.filter((t) => t.id !== id) }));
+  },
 
-        if (tx.type === 'expense') {
-          nextAccounts = accounts.map((a) =>
-            a.id === tx.accountId ? { ...a, balance: a.balance + tx.amount } : a,
-          );
-          nextEnvelopes = envelopes.map((e) =>
-            e.id === tx.envelopeId ? { ...e, spentAmount: e.spentAmount - tx.amount } : e,
-          );
-        } else if (tx.type === 'income') {
-          nextAccounts = accounts.map((a) =>
-            a.id === tx.accountId ? { ...a, balance: a.balance - tx.amount } : a,
-          );
-          nextPool = unallocatedPool - tx.amount;
-        } else if (tx.type === 'allocation') {
-          nextPool = unallocatedPool + tx.amount;
-          nextEnvelopes = envelopes.map((e) =>
-            e.id === tx.envelopeId
-              ? { ...e, allocatedAmount: e.allocatedAmount - tx.amount }
-              : e,
-          );
-        }
+  addExpense: async ({ amount, categoryId, note = '', timestamp }) => {
+    const { householdId } = get();
+    if (!householdId) return;
+    const id = generateId();
+    const ts = timestamp ?? now();
+    const tx: Transaction = { id, type: 'expense', amount, note, categoryId, timestamp: ts, createdAt: ts };
+    set((s) => ({ transactions: [tx, ...s.transactions] }));
+    const { error } = await supabase.from('transactions').insert({
+      id, household_id: householdId, type: 'expense', amount, note, category_id: categoryId, timestamp: ts,
+    });
+    if (error) set((s) => ({ transactions: s.transactions.filter((t) => t.id !== id) }));
+  },
 
-        set({
-          transactions: transactions.filter((t) => t.id !== id),
-          accounts: nextAccounts,
-          envelopes: nextEnvelopes,
-          unallocatedPool: nextPool,
-        });
-      },
+  addAdjustment: async ({ amount, isNegative, note, timestamp }) => {
+    const { householdId } = get();
+    if (!householdId) return;
+    const id = generateId();
+    const ts = timestamp ?? now();
+    const tx: Transaction = { id, type: 'adjustment', amount, note, isNegativeAdjustment: isNegative, timestamp: ts, createdAt: ts };
+    set((s) => ({ transactions: [tx, ...s.transactions] }));
+    const { error } = await supabase.from('transactions').insert({
+      id, household_id: householdId, type: 'adjustment', amount, note,
+      is_negative_adjustment: isNegative, timestamp: ts,
+    });
+    if (error) set((s) => ({ transactions: s.transactions.filter((t) => t.id !== id) }));
+  },
 
-      // ── Selectors ─────────────────────────────────────────────────────────
+  deleteTransaction: async (id) => {
+    const { transactions, envelopes } = get();
+    const tx = transactions.find((t) => t.id === id);
+    if (!tx) return;
 
-      getFinancialSummary: () => {
-        const { accounts, transactions, unallocatedPool } = get();
-        const totalAssets = accounts
-          .filter((a) => a.type === 'asset')
-          .reduce((sum, a) => sum + a.balance, 0);
-        const totalLiabilities = accounts
-          .filter((a) => a.type === 'liability')
-          .reduce((sum, a) => sum + a.balance, 0);
-        const monthlySpending = transactions
-          .filter((t) => t.type === 'expense' && isCurrentMonth(t.timestamp))
-          .reduce((sum, t) => sum + t.amount, 0);
-        const monthlyIncome = transactions
-          .filter((t) => t.type === 'income' && isCurrentMonth(t.timestamp))
-          .reduce((sum, t) => sum + t.amount, 0);
-        return {
-          totalAssets,
-          totalLiabilities,
-          netWorth: totalAssets - totalLiabilities,
-          monthlySpending,
-          monthlyIncome,
-          unallocatedPool,
-        };
-      },
+    let envelopesPatch = envelopes;
+    if (tx.type === 'envelope_deposit' && tx.envelopeId) {
+      envelopesPatch = envelopes.map((e) => e.id === tx.envelopeId ? { ...e, balance: Math.max(0, e.balance - tx.amount) } : e);
+    } else if (tx.type === 'envelope_withdrawal' && tx.envelopeId) {
+      envelopesPatch = envelopes.map((e) => e.id === tx.envelopeId ? { ...e, balance: e.balance + tx.amount } : e);
+    }
 
-      getEnvelopeBalances: () => {
-        const { envelopes } = get();
-        return envelopes.map((e) => {
-          const remaining = e.allocatedAmount - e.spentAmount;
-          const percentUsed =
-            e.allocatedAmount > 0
-              ? Math.min(100, (e.spentAmount / e.allocatedAmount) * 100)
-              : 0;
-          return { envelope: e, remaining, percentUsed };
-        });
-      },
+    set({ transactions: transactions.filter((t) => t.id !== id), envelopes: envelopesPatch });
 
-      getRecentTransactions: (limit = 10) => {
-        return get()
-          .transactions.slice()
-          .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-          .slice(0, limit);
-      },
+    const { error } = await supabase.from('transactions').delete().eq('id', id);
+    if (error) set({ transactions, envelopes });
 
-      getAccountById: (id) => get().accounts.find((a) => a.id === id),
-      getEnvelopeById: (id) => get().envelopes.find((e) => e.id === id),
-    }),
-    {
-      name: 'ownly-budget',
-      storage: createJSONStorage(() => AsyncStorage),
-    },
-  ),
-);
+    // Sync envelope balance to DB if it changed
+    if (tx.envelopeId && envelopesPatch !== envelopes) {
+      const updated = envelopesPatch.find((e) => e.id === tx.envelopeId);
+      if (updated) await supabase.from('envelopes').update({ balance: updated.balance }).eq('id', updated.id);
+    }
+  },
+
+  // ── Reset ─────────────────────────────────────────────────────────────────────
+
+  resetAll: async () => {
+    const { householdId } = get();
+    if (!householdId) return;
+    set({ categories: [], envelopes: [], transactions: [] });
+    await Promise.all([
+      supabase.from('transactions').delete().eq('household_id', householdId),
+      supabase.from('envelopes').delete().eq('household_id', householdId),
+      supabase.from('categories').delete().eq('household_id', householdId),
+    ]);
+  },
+
+  // ── Selectors ─────────────────────────────────────────────────────────────────
+
+  getCFSSummary: () => {
+    const { transactions, envelopes } = get();
+    const totalIncome  = transactions.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount, 0);
+    const totalExpenses= transactions.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+    const totalEnvelopeBalances = envelopes.reduce((s, e) => s + e.balance, 0);
+    const adjustments  = transactions.filter((t) => t.type === 'adjustment').reduce((s, t) => s + (t.isNegativeAdjustment ? -t.amount : t.amount), 0);
+    const monthlySpending = transactions.filter((t) => t.type === 'expense' && isCurrentMonth(t.timestamp)).reduce((s, t) => s + t.amount, 0);
+    return { cfs: totalIncome - totalExpenses - totalEnvelopeBalances + adjustments, totalIncome, totalExpenses, totalEnvelopeBalances, monthlySpending };
+  },
+
+  getMonthlySpentByCategory: () => {
+    const result: Record<string, number> = {};
+    get().transactions
+      .filter((t) => t.type === 'expense' && isCurrentMonth(t.timestamp) && t.categoryId)
+      .forEach((t) => { result[t.categoryId!] = (result[t.categoryId!] ?? 0) + t.amount; });
+    return result;
+  },
+
+  getRecentTransactions: (limit = 10) =>
+    get().transactions.slice().sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()).slice(0, limit),
+
+  getCategoryById: (id) => get().categories.find((c) => c.id === id),
+  getEnvelopeById: (id) => get().envelopes.find((e) => e.id === id),
+}));
