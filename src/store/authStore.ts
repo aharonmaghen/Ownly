@@ -56,29 +56,41 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
   signUp: async (email, password, inviteCode) => {
     set({ loading: true, error: null });
     try {
-      const { data, error } = await supabase.auth.signUp({ email, password });
-      if (error) throw error;
-      if (!data.user) throw new Error('Sign up failed');
-
+      // Validate invite code before creating the auth user so an invalid code
+      // never results in an orphaned account.
+      let householdToJoin: { id: string; name: string; invite_code: string } | null = null;
       if (inviteCode) {
-        // Join existing household
         const { data: hh, error: hhErr } = await supabase
           .from('households')
           .select('id, name, invite_code')
           .eq('invite_code', inviteCode.toUpperCase().trim())
           .single();
-        if (hhErr || !hh) throw new Error('Invalid invite code');
+        if (hhErr || !hh) {
+          set({ loading: false, error: 'Invalid invite code' });
+          return;
+        }
+        householdToJoin = hh;
+      }
 
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: { emailRedirectTo: 'https://ownly-sable.vercel.app/' },
+      });
+      if (error) throw error;
+      if (!data.user) throw new Error('Sign up failed');
+
+      if (householdToJoin) {
         const { error: joinErr } = await supabase
           .from('household_members')
-          .insert({ household_id: hh.id, user_id: data.user.id, role: 'member' });
+          .insert({ household_id: householdToJoin.id, user_id: data.user.id, role: 'member' });
         if (joinErr) throw joinErr;
 
         set({
-          session: data.session,
-          user:    data.user,
-          household: { id: hh.id, name: hh.name, inviteCode: hh.invite_code },
-          loading: false,
+          session:   data.session,
+          user:      data.user,
+          household: { id: householdToJoin.id, name: householdToJoin.name, inviteCode: householdToJoin.invite_code },
+          loading:   false,
         });
       } else {
         // Create new household
@@ -95,10 +107,10 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
         if (memberErr) throw memberErr;
 
         set({
-          session: data.session,
-          user:    data.user,
+          session:   data.session,
+          user:      data.user,
           household: { id: hh.id, name: hh.name, inviteCode: hh.invite_code },
-          loading: false,
+          loading:   false,
         });
       }
     } catch (e: any) {

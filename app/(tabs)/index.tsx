@@ -11,6 +11,7 @@ import { AddExpenseModal } from '../../src/components/modals/AddExpenseModal';
 import { AddIncomeModal } from '../../src/components/modals/AddIncomeModal';
 import { AdjustCFSModal } from '../../src/components/modals/AdjustCFSModal';
 import { Language } from '../../src/types';
+import { LogoWordmark } from '../../src/components/LogoWordmark';
 
 type ModalType = 'expense' | 'income' | 'adjust' | null;
 
@@ -32,7 +33,7 @@ export default function DashboardScreen() {
         className="flex-row items-center justify-between px-4 pt-2 pb-3 bg-brand-700"
         style={{ flexDirection: row }}
       >
-        <Text className="text-white text-xl font-extrabold tracking-tight">Ownly</Text>
+        <LogoWordmark color="#ffffff" size="md" />
         <TouchableOpacity
           onPress={toggleLanguage}
           className="bg-white/20 rounded-full px-3 py-1"
