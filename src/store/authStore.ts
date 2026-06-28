@@ -1,0 +1,138 @@
+import { create } from 'zustand';
+import { Session, User } from '@supabase/supabase-js';
+import { supabase } from '../lib/supabase';
+
+interface Household {
+  id: string;
+  name: string;
+  inviteCode: string;
+}
+
+interface AuthStore {
+  session:    Session | null;
+  user:       User | null;
+  household:  Household | null;
+  loading:    boolean;
+  error:      string | null;
+
+  initialize():                                       Promise<void>;
+  signUp(email: string, password: string, inviteCode?: string): Promise<void>;
+  signIn(email: string, password: string):            Promise<void>;
+  signOut():                                          Promise<void>;
+  clearError():                                       void;
+}
+
+export const useAuthStore = create<AuthStore>((set, get) => ({
+  session:   null,
+  user:      null,
+  household: null,
+  loading:   true,
+  error:     null,
+
+  initialize: async () => {
+    set({ loading: true, error: null });
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        const household = await fetchHousehold();
+        set({ session, user: session.user, household, loading: false });
+      } else {
+        set({ session: null, user: null, household: null, loading: false });
+      }
+    } catch {
+      set({ loading: false });
+    }
+
+    supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (session) {
+        const household = await fetchHousehold();
+        set({ session, user: session.user, household });
+      } else {
+        set({ session: null, user: null, household: null });
+      }
+    });
+  },
+
+  signUp: async (email, password, inviteCode) => {
+    set({ loading: true, error: null });
+    try {
+      const { data, error } = await supabase.auth.signUp({ email, password });
+      if (error) throw error;
+      if (!data.user) throw new Error('Sign up failed');
+
+      if (inviteCode) {
+        // Join existing household
+        const { data: hh, error: hhErr } = await supabase
+          .from('households')
+          .select('id, name, invite_code')
+          .eq('invite_code', inviteCode.toUpperCase().trim())
+          .single();
+        if (hhErr || !hh) throw new Error('Invalid invite code');
+
+        const { error: joinErr } = await supabase
+          .from('household_members')
+          .insert({ household_id: hh.id, user_id: data.user.id, role: 'member' });
+        if (joinErr) throw joinErr;
+
+        set({
+          session: data.session,
+          user:    data.user,
+          household: { id: hh.id, name: hh.name, inviteCode: hh.invite_code },
+          loading: false,
+        });
+      } else {
+        // Create new household
+        const { data: hh, error: hhErr } = await supabase
+          .from('households')
+          .insert({ name: 'My Household' })
+          .select()
+          .single();
+        if (hhErr || !hh) throw hhErr ?? new Error('Failed to create household');
+
+        const { error: memberErr } = await supabase
+          .from('household_members')
+          .insert({ household_id: hh.id, user_id: data.user.id, role: 'owner' });
+        if (memberErr) throw memberErr;
+
+        set({
+          session: data.session,
+          user:    data.user,
+          household: { id: hh.id, name: hh.name, inviteCode: hh.invite_code },
+          loading: false,
+        });
+      }
+    } catch (e: any) {
+      set({ loading: false, error: e.message ?? 'Sign up failed' });
+    }
+  },
+
+  signIn: async (email, password) => {
+    set({ loading: true, error: null });
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) throw error;
+      const household = await fetchHousehold();
+      set({ session: data.session, user: data.user, household, loading: false });
+    } catch (e: any) {
+      set({ loading: false, error: e.message ?? 'Sign in failed' });
+    }
+  },
+
+  signOut: async () => {
+    await supabase.auth.signOut();
+    set({ session: null, user: null, household: null });
+  },
+
+  clearError: () => set({ error: null }),
+}));
+
+async function fetchHousehold(): Promise<Household | null> {
+  const { data } = await supabase
+    .from('household_members')
+    .select('household_id, households(id, name, invite_code)')
+    .single();
+  if (!data) return null;
+  const hh = (data as any).households;
+  if (!hh) return null;
+  return { id: hh.id, name: hh.name, inviteCode: hh.invite_code };
+}

@@ -1,33 +1,22 @@
 import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  ScrollView,
-  TouchableOpacity,
-  SafeAreaView,
-  Platform,
-} from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, SafeAreaView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useBudgetStore } from '../../src/store/budgetStore';
 import { useSettingsStore } from '../../src/store/settingsStore';
 import { useTranslation } from '../../src/hooks/useTranslation';
 import { useRTL } from '../../src/hooks/useRTL';
-import { NetWorthBanner } from '../../src/components/dashboard/NetWorthBanner';
-import { EnvelopeCard } from '../../src/components/dashboard/EnvelopeCard';
+import { CFSBanner } from '../../src/components/dashboard/NetWorthBanner';
 import { RecentTransactions } from '../../src/components/dashboard/RecentTransactions';
 import { AddExpenseModal } from '../../src/components/modals/AddExpenseModal';
 import { AddIncomeModal } from '../../src/components/modals/AddIncomeModal';
-import { AllocateFundsModal } from '../../src/components/modals/AllocateFundsModal';
+import { AdjustCFSModal } from '../../src/components/modals/AdjustCFSModal';
 import { Language } from '../../src/types';
 
-type ModalType = 'expense' | 'income' | 'allocate' | null;
+type ModalType = 'expense' | 'income' | 'adjust' | null;
 
 export default function DashboardScreen() {
   const { t } = useTranslation();
-  const { isRTL, row, textAlign, backIcon } = useRTL();
+  const { isRTL, row, textAlign } = useRTL();
   const { settings, setLanguage } = useSettingsStore();
-  const envelopeBalances = useBudgetStore((s) => s.getEnvelopeBalances());
-
   const [activeModal, setActiveModal] = useState<ModalType>(null);
 
   const toggleLanguage = () => {
@@ -36,43 +25,31 @@ export default function DashboardScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-surface">
-      {/* ── Top app bar ── */}
+      {/* App bar */}
       <View
         className="flex-row items-center justify-between px-4 pt-2 pb-3 bg-brand-700"
         style={{ flexDirection: row }}
       >
         <Text className="text-white text-xl font-extrabold tracking-tight">Ownly</Text>
-
-        <View className="flex-row items-center gap-3" style={{ flexDirection: row }}>
-          {/* Language toggle */}
-          <TouchableOpacity
-            onPress={toggleLanguage}
-            className="bg-white/20 rounded-full px-3 py-1"
-          >
-            <Text className="text-white text-xs font-bold">
-              {settings.language === 'en' ? 'עב' : 'EN'}
-            </Text>
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity
+          onPress={toggleLanguage}
+          className="bg-white/20 rounded-full px-3 py-1"
+        >
+          <Text className="text-white text-xs font-bold">
+            {settings.language === 'en' ? 'עב' : 'EN'}
+          </Text>
+        </TouchableOpacity>
       </View>
 
-      {/* ── Scrollable body ── */}
       <ScrollView
         className="flex-1"
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 120 }}
       >
-        {/* Net Worth Banner */}
-        <NetWorthBanner />
+        <CFSBanner />
 
         {/* Quick Actions */}
         <View className="flex-row gap-3 mx-4 mt-4" style={{ flexDirection: row }}>
-          <ActionChip
-            icon="add-circle-outline"
-            label={t('transactions.addExpense')}
-            color="#ef4444"
-            onPress={() => setActiveModal('expense')}
-          />
           <ActionChip
             icon="arrow-down-circle-outline"
             label={t('transactions.addIncome')}
@@ -80,39 +57,30 @@ export default function DashboardScreen() {
             onPress={() => setActiveModal('income')}
           />
           <ActionChip
-            icon="swap-horizontal-outline"
-            label={t('transactions.allocate')}
+            icon="arrow-up-circle-outline"
+            label={t('transactions.addExpense')}
+            color="#ef4444"
+            onPress={() => setActiveModal('expense')}
+          />
+          <ActionChip
+            icon="options-outline"
+            label={t('transactions.adjust')}
             color="#8b5cf6"
-            onPress={() => setActiveModal('allocate')}
+            onPress={() => setActiveModal('adjust')}
           />
         </View>
 
-        {/* Envelopes section */}
-        <Text className="text-slate-700 font-bold text-base mx-4 mt-5 mb-2" style={{ textAlign }}>
-          {t('tabs.envelopes')}
-        </Text>
-        {envelopeBalances.length === 0 ? (
-          <Text className="text-slate-400 text-sm text-center my-4">
-            {t('envelopes.empty')}
-          </Text>
-        ) : (
-          envelopeBalances.map((b) => (
-            <EnvelopeCard key={b.envelope.id} data={b} />
-          ))
-        )}
-
-        {/* Recent Transactions */}
         <View className="mt-4">
           <RecentTransactions />
         </View>
       </ScrollView>
 
-      {/* ── Primary FAB (Add Expense) ── */}
+      {/* FAB — Add Expense */}
       <TouchableOpacity
         onPress={() => setActiveModal('expense')}
-        className="absolute bottom-6 bg-brand-600 w-14 h-14 rounded-full items-center justify-center"
+        className="absolute bottom-6 bg-expense w-14 h-14 rounded-full items-center justify-center"
         style={[
-          { shadowColor: '#0284c7', shadowOpacity: 0.4, shadowRadius: 12, elevation: 8 },
+          { shadowColor: '#ef4444', shadowOpacity: 0.4, shadowRadius: 12, elevation: 8 },
           isRTL ? { left: 24 } : { right: 24 },
         ]}
         activeOpacity={0.85}
@@ -120,19 +88,9 @@ export default function DashboardScreen() {
         <Ionicons name="add" size={30} color="#fff" />
       </TouchableOpacity>
 
-      {/* ── Modals ── */}
-      <AddExpenseModal
-        visible={activeModal === 'expense'}
-        onClose={() => setActiveModal(null)}
-      />
-      <AddIncomeModal
-        visible={activeModal === 'income'}
-        onClose={() => setActiveModal(null)}
-      />
-      <AllocateFundsModal
-        visible={activeModal === 'allocate'}
-        onClose={() => setActiveModal(null)}
-      />
+      <AddExpenseModal visible={activeModal === 'expense'} onClose={() => setActiveModal(null)} />
+      <AddIncomeModal  visible={activeModal === 'income'}  onClose={() => setActiveModal(null)} />
+      <AdjustCFSModal  visible={activeModal === 'adjust'}  onClose={() => setActiveModal(null)} />
     </SafeAreaView>
   );
 }

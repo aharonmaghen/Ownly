@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useBudgetStore } from '../../store/budgetStore';
@@ -9,9 +9,11 @@ import { Transaction, TransactionType } from '../../types';
 import { formatDate } from '../../utils/date';
 
 const TX_META: Record<TransactionType, { icon: string; color: string; sign: string }> = {
-  expense:    { icon: 'arrow-up-circle-outline',   color: '#ef4444', sign: '-' },
-  income:     { icon: 'arrow-down-circle-outline', color: '#10b981', sign: '+' },
-  allocation: { icon: 'swap-horizontal-outline',   color: '#8b5cf6', sign: '' },
+  income:              { icon: 'arrow-down-circle-outline', color: '#10b981', sign: '+' },
+  expense:             { icon: 'arrow-up-circle-outline',   color: '#ef4444', sign: '-' },
+  envelope_deposit:    { icon: 'save-outline',              color: '#0284c7', sign: '-' },
+  envelope_withdrawal: { icon: 'arrow-undo-outline',        color: '#f59e0b', sign: '+' },
+  adjustment:          { icon: 'options-outline',           color: '#8b5cf6', sign: '±' },
 };
 
 interface TransactionRowProps {
@@ -20,18 +22,23 @@ interface TransactionRowProps {
 
 function TransactionRow({ tx }: TransactionRowProps) {
   const { format } = useCurrency();
-  const { isRTL, row, textAlign } = useRTL();
+  const { row, textAlign } = useRTL();
   const { language } = useTranslation();
   const meta = TX_META[tx.type];
-  const account = useBudgetStore((s) => s.getAccountById(tx.accountId));
-  const envelope = useBudgetStore((s) => s.getEnvelopeById(tx.envelopeId ?? ''));
+  const category = useBudgetStore((s) => s.categories.find((c) => c.id === tx.categoryId));
+  const envelope  = useBudgetStore((s) => s.envelopes.find((e) => e.id === tx.envelopeId));
+
+  const sign = tx.type === 'adjustment'
+    ? (tx.isNegativeAdjustment ? '-' : '+')
+    : meta.sign;
+
+  const subtitle = category?.name ?? envelope?.name ?? '';
 
   return (
     <View
       className="flex-row items-center py-3 border-b border-slate-100"
       style={{ flexDirection: row }}
     >
-      {/* Icon */}
       <View
         className="w-9 h-9 rounded-full items-center justify-center"
         style={{ backgroundColor: meta.color + '18' }}
@@ -39,23 +46,23 @@ function TransactionRow({ tx }: TransactionRowProps) {
         <Ionicons name={meta.icon as any} size={18} color={meta.color} />
       </View>
 
-      {/* Description */}
       <View className="flex-1 mx-3">
         <Text className="text-slate-800 text-sm font-medium" style={{ textAlign }} numberOfLines={1}>
-          {tx.notes || (envelope?.name ?? account?.name ?? '—')}
+          {tx.note || subtitle || '—'}
         </Text>
-        <Text className="text-slate-400 text-xs" style={{ textAlign }}>
-          {formatDate(tx.timestamp, language)}
-          {envelope ? `  ·  ${envelope.name}` : ''}
-        </Text>
+        {subtitle ? (
+          <Text className="text-slate-400 text-xs" style={{ textAlign }}>
+            {subtitle} · {formatDate(tx.timestamp, language)}
+          </Text>
+        ) : (
+          <Text className="text-slate-400 text-xs" style={{ textAlign }}>
+            {formatDate(tx.timestamp, language)}
+          </Text>
+        )}
       </View>
 
-      {/* Amount */}
-      <Text
-        className="font-bold text-sm"
-        style={{ color: meta.color, textAlign: isRTL ? 'left' : 'right' }}
-      >
-        {meta.sign}{format(tx.amount)}
+      <Text className="font-bold text-sm" style={{ color: meta.color }}>
+        {sign}{format(tx.amount)}
       </Text>
     </View>
   );
@@ -64,7 +71,15 @@ function TransactionRow({ tx }: TransactionRowProps) {
 export function RecentTransactions() {
   const { t } = useTranslation();
   const { textAlign } = useRTL();
-  const transactions = useBudgetStore((s) => s.getRecentTransactions(8));
+  const rawTransactions = useBudgetStore((s) => s.transactions);
+  const transactions = useMemo(
+    () =>
+      rawTransactions
+        .slice()
+        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+        .slice(0, 8),
+    [rawTransactions],
+  );
 
   if (!transactions.length) {
     return (
@@ -79,7 +94,10 @@ export function RecentTransactions() {
       <Text className="text-slate-700 font-bold text-base mx-4 mb-1" style={{ textAlign }}>
         {t('transactions.title')}
       </Text>
-      <View className="bg-white rounded-2xl mx-4 px-4" style={{ shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 6, elevation: 1 }}>
+      <View
+        className="bg-white rounded-2xl mx-4 px-4"
+        style={{ shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 6, elevation: 1 }}
+      >
         {transactions.map((tx) => (
           <TransactionRow key={tx.id} tx={tx} />
         ))}
