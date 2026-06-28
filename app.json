@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Ownly",
-    "slug": "Ownly",
+    "slug": "ownly",
     "scheme": "ownly",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -36,6 +36,13 @@
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "60c8f8b0-1a4c-4f93-92a7-d1e9c469cda6"
+      }
+    },
+    "owner": "maghen18s-team"
   }
 }
