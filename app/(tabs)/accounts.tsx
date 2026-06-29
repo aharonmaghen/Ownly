@@ -217,18 +217,20 @@ export default function BudgetScreen() {
       {/* Edit Limit Sheet */}
       {!!editingCategory && (
         <Modal visible animationType="slide" transparent presentationStyle="pageSheet">
-          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} className="flex-1">
+          <KeyboardAvoidingView behavior="padding" className="flex-1">
             <View className="flex-1 justify-end">
               <View className="bg-white rounded-t-3xl pt-3 pb-10 px-5">
                 <View className="w-10 h-1 bg-slate-300 rounded-full self-center mb-4" />
                 <Text className="text-xl font-bold text-slate-800 mb-4">
                   {t('budget.editTitle')}{editingCategory ? ` — ${editingCategory.name}` : ''}
                 </Text>
-                <AmountInput value={newLimit} onChangeText={setNewLimit} label={t('budget.limit')} autoFocus />
-                <View className="flex-row gap-3 mt-2">
-                  <Button label={t('misc.cancel')} variant="secondary" onPress={() => setEditingCategory(null)} style={{ flex: 1 }} />
-                  <Button label={t('misc.save')} variant="primary" onPress={handleUpdateLimit} style={{ flex: 1 }} />
-                </View>
+                <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+                  <AmountInput value={newLimit} onChangeText={setNewLimit} label={t('budget.limit')} autoFocus />
+                  <View className="flex-row gap-3 mt-2 mb-2">
+                    <Button label={t('misc.cancel')} variant="secondary" onPress={() => setEditingCategory(null)} style={{ flex: 1 }} />
+                    <Button label={t('misc.save')} variant="primary" onPress={handleUpdateLimit} style={{ flex: 1 }} />
+                  </View>
+                </ScrollView>
               </View>
             </View>
           </KeyboardAvoidingView>
