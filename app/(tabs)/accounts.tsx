@@ -227,7 +227,7 @@ export default function BudgetScreen() {
       {/* Edit Category Sheet */}
       {!!editingCategory && (
         <Modal visible animationType="slide" transparent presentationStyle="pageSheet">
-          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} className="flex-1">
+          <KeyboardAvoidingView behavior="padding" className="flex-1">
             <View className="flex-1 justify-end">
               <View className="bg-white rounded-t-3xl pt-3 pb-10 px-5">
                 <View className="w-10 h-1 bg-slate-300 rounded-full self-center mb-4" />
@@ -242,7 +242,7 @@ export default function BudgetScreen() {
                     </Text>
                     <View className="flex-row gap-3">
                       <Button label={t('misc.cancel')} variant="secondary" onPress={() => setConfirmingDelete(false)} style={{ flex: 1 }} />
-                      <Button label={t('misc.delete')} variant="danger" onPress={() => { deleteCategory(editingCategory.id); closeEditModal(); }} style={{ flex: 1 }} />
+                      <Button label={t('misc.delete')} variant="danger" onPress={() => { deleteCategory(editingCategory!.id); closeEditModal(); }} style={{ flex: 1 }} />
                     </View>
                   </>
                 ) : (
@@ -271,7 +271,7 @@ export default function BudgetScreen() {
                       onPress={() => setConfirmingDelete(true)}
                       className="mt-4 py-3 items-center"
                     >
-                      <Text className="text-red-500 font-medium text-sm">{t('misc.delete')} "{editingCategory.name}"</Text>
+                      <Text className="text-red-500 font-medium text-sm">{t('misc.delete')} "{editingCategory!.name}"</Text>
                     </TouchableOpacity>
                   </>
                 )}
