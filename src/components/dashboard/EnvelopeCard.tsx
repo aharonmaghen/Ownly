@@ -11,9 +11,10 @@ interface EnvelopeCardProps {
   envelope: Envelope;
   onDeposit: () => void;
   onWithdraw: () => void;
+  onEdit?: () => void;
 }
 
-export function EnvelopeCard({ envelope, onDeposit, onWithdraw }: EnvelopeCardProps) {
+export function EnvelopeCard({ envelope, onDeposit, onWithdraw, onEdit }: EnvelopeCardProps) {
   const { t } = useTranslation();
   const { format } = useCurrency();
   const { row, textAlign } = useRTL();
@@ -48,9 +49,14 @@ export function EnvelopeCard({ envelope, onDeposit, onWithdraw }: EnvelopeCardPr
           )}
         </View>
 
-        <Text className="font-bold text-base" style={{ color: envelope.color }}>
+        <Text className="font-bold text-base mr-2" style={{ color: envelope.color }}>
           {format(envelope.balance)}
         </Text>
+        {onEdit && (
+          <TouchableOpacity onPress={onEdit} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Ionicons name="pencil-outline" size={16} color="#94a3b8" />
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Progress toward target */}

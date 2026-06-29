@@ -13,11 +13,12 @@ export function currencySymbol(currency: Currency): string {
 
 export function formatAmount(amount: number, currency: Currency): string {
   const sym = currencySymbol(currency);
-  const abs = Math.abs(amount).toFixed(2);
-  return `${sym}${abs}`;
+  const abs = Math.abs(amount);
+  const formatted = abs.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const sign = amount < 0 ? '-' : '';
+  return `${sign}${sym}${formatted}`;
 }
 
 export function formatSigned(amount: number, currency: Currency): string {
-  const sign = amount < 0 ? '-' : '';
-  return `${sign}${formatAmount(Math.abs(amount), currency)}`;
+  return formatAmount(amount, currency);
 }

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity,
-  TextInput, Modal, SafeAreaView, Alert,
+  TextInput, Modal, SafeAreaView,
   KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -34,27 +34,53 @@ export default function EnvelopesScreen() {
   const { row, textAlign, isRTL } = useRTL();
   const screenHeight = useScreenHeight();
   const envelopes = useBudgetStore((s) => s.envelopes);
-  const { addEnvelope, deleteEnvelope } = useBudgetStore();
+  const { addEnvelope, updateEnvelope, deleteEnvelope } = useBudgetStore();
 
+  // Add form state
   const [showAddForm, setShowAddForm]         = useState(false);
-  const [selectedEnvelope, setSelectedEnvelope] = useState<Envelope | null>(null);
-  const [fundsMode, setFundsMode]             = useState<'deposit' | 'withdraw'>('deposit');
   const [name, setName]                       = useState('');
   const [target, setTarget]                   = useState('');
   const [icon, setIcon]                       = useState(ICON_OPTIONS[0]);
   const [color, setColor]                     = useState(COLOR_OPTIONS[0]);
   const [errors, setErrors]                   = useState<Record<string, string>>({});
 
+  // Edit modal state
+  const [editingEnvelope, setEditingEnvelope] = useState<Envelope | null>(null);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [editName, setEditName]               = useState('');
+  const [editTarget, setEditTarget]           = useState('');
+
+  // Funds modal state
+  const [selectedEnvelope, setSelectedEnvelope] = useState<Envelope | null>(null);
+  const [fundsMode, setFundsMode]             = useState<'deposit' | 'withdraw'>('deposit');
+
   const totalInEnvelopes = envelopes.reduce((s, e) => s + e.balance, 0);
 
-  const openDeposit = (env: Envelope) => {
-    setSelectedEnvelope(env);
-    setFundsMode('deposit');
+  const openDeposit = (env: Envelope) => { setSelectedEnvelope(env); setFundsMode('deposit'); };
+  const openWithdraw = (env: Envelope) => { setSelectedEnvelope(env); setFundsMode('withdraw'); };
+
+  const openEditModal = (env: Envelope) => {
+    setEditingEnvelope(env);
+    setEditName(env.name);
+    setEditTarget(env.targetAmount != null ? String(env.targetAmount) : '');
+    setConfirmingDelete(false);
   };
 
-  const openWithdraw = (env: Envelope) => {
-    setSelectedEnvelope(env);
-    setFundsMode('withdraw');
+  const closeEditModal = () => {
+    setEditingEnvelope(null);
+    setConfirmingDelete(false);
+  };
+
+  const handleSaveEnvelope = () => {
+    if (!editingEnvelope) return;
+    const patch: Partial<Pick<Envelope, 'name' | 'targetAmount'>> = {};
+    const trimmedName = editName.trim();
+    if (trimmedName && trimmedName !== editingEnvelope.name) patch.name = trimmedName;
+    const num = editTarget ? parseFloat(editTarget) : undefined;
+    const prevTarget = editingEnvelope.targetAmount;
+    if (num !== prevTarget) patch.targetAmount = num;
+    if (Object.keys(patch).length) updateEnvelope(editingEnvelope.id, patch);
+    closeEditModal();
   };
 
   const handleAdd = () => {
@@ -105,23 +131,13 @@ export default function EnvelopesScreen() {
           </View>
         ) : (
           envelopes.map((env) => (
-            <View key={env.id}>
-              <TouchableOpacity
-                onLongPress={() =>
-                  Alert.alert(env.name, undefined, [
-                    { text: t('misc.delete'), style: 'destructive', onPress: () => deleteEnvelope(env.id) },
-                    { text: t('misc.cancel'), style: 'cancel' },
-                  ])
-                }
-                activeOpacity={1}
-              >
-                <EnvelopeCard
-                  envelope={env}
-                  onDeposit={() => openDeposit(env)}
-                  onWithdraw={() => openWithdraw(env)}
-                />
-              </TouchableOpacity>
-            </View>
+            <EnvelopeCard
+              key={env.id}
+              envelope={env}
+              onDeposit={() => openDeposit(env)}
+              onWithdraw={() => openWithdraw(env)}
+              onEdit={() => openEditModal(env)}
+            />
           ))
         )}
       </ScrollView>
@@ -182,6 +198,64 @@ export default function EnvelopesScreen() {
                   <Button label={t('misc.cancel')} variant="secondary" onPress={() => { setShowAddForm(false); setErrors({}); }} style={{ flex: 1 }} />
                   <Button label={t('misc.add')} variant="primary" onPress={handleAdd} style={{ flex: 1 }} />
                 </View>
+              </View>
+            </View>
+          </KeyboardAvoidingView>
+        </Modal>
+      )}
+
+      {/* Edit Envelope Sheet */}
+      {!!editingEnvelope && (
+        <Modal visible animationType="slide" transparent presentationStyle="pageSheet">
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} className="flex-1">
+            <View className="flex-1 justify-end">
+              <View className="bg-white rounded-t-3xl pt-3 pb-10 px-5">
+                <View className="w-10 h-1 bg-slate-300 rounded-full self-center mb-4" />
+
+                {confirmingDelete ? (
+                  <>
+                    <Text className="text-xl font-bold text-slate-800 mb-2" style={{ textAlign }}>
+                      {t('misc.delete')} "{editingEnvelope.name}"?
+                    </Text>
+                    <Text className="text-slate-500 text-sm mb-6" style={{ textAlign }}>
+                      {t('envelopes.deleteConfirm')}
+                    </Text>
+                    <View className="flex-row gap-3">
+                      <Button label={t('misc.cancel')} variant="secondary" onPress={() => setConfirmingDelete(false)} style={{ flex: 1 }} />
+                      <Button label={t('misc.delete')} variant="danger" onPress={() => { deleteEnvelope(editingEnvelope.id); closeEditModal(); }} style={{ flex: 1 }} />
+                    </View>
+                  </>
+                ) : (
+                  <>
+                    <Text className="text-xl font-bold text-slate-800 mb-4" style={{ textAlign }}>
+                      {t('envelopes.editTitle')}
+                    </Text>
+
+                    <Text className="text-sm font-medium text-slate-600 mb-1">{t('envelopes.name')}</Text>
+                    <TextInput
+                      value={editName}
+                      onChangeText={setEditName}
+                      placeholder={t('envelopes.namePlaceholder')}
+                      placeholderTextColor="#94a3b8"
+                      textAlign={isRTL ? 'right' : 'left'}
+                      className="border border-slate-200 rounded-xl px-3 py-2 bg-slate-50 text-slate-800 mb-3"
+                    />
+
+                    <AmountInput value={editTarget} onChangeText={setEditTarget} label={t('envelopes.target')} />
+
+                    <View className="flex-row gap-3 mt-2">
+                      <Button label={t('misc.cancel')} variant="secondary" onPress={closeEditModal} style={{ flex: 1 }} />
+                      <Button label={t('misc.save')} variant="primary" onPress={handleSaveEnvelope} style={{ flex: 1 }} />
+                    </View>
+
+                    <TouchableOpacity
+                      onPress={() => setConfirmingDelete(true)}
+                      className="mt-4 py-3 items-center"
+                    >
+                      <Text className="text-red-500 font-medium text-sm">{t('misc.delete')} "{editingEnvelope.name}"</Text>
+                    </TouchableOpacity>
+                  </>
+                )}
               </View>
             </View>
           </KeyboardAvoidingView>

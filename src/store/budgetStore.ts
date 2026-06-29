@@ -61,6 +61,7 @@ interface BudgetStore {
   deleteCategory(id: string): Promise<void>;
 
   addEnvelope(data: Omit<Envelope, 'id' | 'balance' | 'createdAt'>): Promise<void>;
+  updateEnvelope(id: string, data: Partial<Pick<Envelope, 'name' | 'targetAmount'>>): Promise<void>;
   deleteEnvelope(id: string): Promise<void>;
   depositToEnvelope(params: { envelopeId: string; amount: number; note?: string }): Promise<void>;
   withdrawFromEnvelope(params: { envelopeId: string; amount: number; note?: string }): Promise<void>;
@@ -200,6 +201,16 @@ export const useBudgetStore = create<BudgetStore>()((set, get) => ({
       icon: data.icon, color: data.color,
     });
     if (error) set((s) => ({ envelopes: s.envelopes.filter((e) => e.id !== id) }));
+  },
+
+  updateEnvelope: async (id, data) => {
+    const prev = get().envelopes.find((e) => e.id === id);
+    set((s) => ({ envelopes: s.envelopes.map((e) => e.id === id ? { ...e, ...data } : e) }));
+    const patch: Record<string, any> = {};
+    if (data.name         != null) patch.name          = data.name;
+    if ('targetAmount' in data)    patch.target_amount = data.targetAmount ?? null;
+    const { error } = await supabase.from('envelopes').update(patch).eq('id', id);
+    if (error && prev) set((s) => ({ envelopes: s.envelopes.map((e) => e.id === id ? prev : e) }));
   },
 
   deleteEnvelope: async (id) => {

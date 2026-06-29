@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity,
-  TextInput, Modal, SafeAreaView, Alert,
+  TextInput, Modal, SafeAreaView,
   KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -40,8 +40,10 @@ export default function BudgetScreen() {
 
   const [showAddForm, setShowAddForm]               = useState(false);
   const [editingCategory, setEditingCategory]       = useState<BudgetCategory | null>(null);
+  const [confirmingDelete, setConfirmingDelete]     = useState(false);
   const [name, setName]                             = useState('');
   const [limit, setLimit]                           = useState('');
+  const [newName, setNewName]                       = useState('');
   const [newLimit, setNewLimit]                     = useState('');
   const [icon, setIcon]                             = useState(ICON_OPTIONS[0]);
   const [color, setColor]                           = useState(COLOR_OPTIONS[0]);
@@ -66,13 +68,27 @@ export default function BudgetScreen() {
     setShowAddForm(false);
   };
 
-  const handleUpdateLimit = () => {
-    if (!editingCategory) return;
-    const num = parseFloat(newLimit);
-    if (!num || num <= 0) return;
-    updateCategory(editingCategory.id, { monthlyLimit: num });
+  const openEditModal = (cat: BudgetCategory) => {
+    setEditingCategory(cat);
+    setNewName(cat.name);
+    setNewLimit(cat.monthlyLimit === 0 ? '' : String(cat.monthlyLimit));
+    setConfirmingDelete(false);
+  };
+
+  const closeEditModal = () => {
     setEditingCategory(null);
-    setNewLimit('');
+    setConfirmingDelete(false);
+  };
+
+  const handleSaveCategory = () => {
+    if (!editingCategory) return;
+    const patch: Partial<Pick<BudgetCategory, 'name' | 'monthlyLimit'>> = {};
+    const trimmedName = newName.trim();
+    if (trimmedName && trimmedName !== editingCategory.name) patch.name = trimmedName;
+    const num = parseFloat(newLimit);
+    if (num > 0 && num !== editingCategory.monthlyLimit) patch.monthlyLimit = num;
+    if (Object.keys(patch).length) updateCategory(editingCategory.id, patch);
+    closeEditModal();
   };
 
   return (
@@ -115,13 +131,7 @@ export default function BudgetScreen() {
             return (
               <TouchableOpacity
                 key={cat.id}
-                onPress={() => { setEditingCategory(cat); setNewLimit(cat.monthlyLimit === 0 ? '' : String(cat.monthlyLimit)); }}
-                onLongPress={() =>
-                  Alert.alert(cat.name, undefined, [
-                    { text: t('misc.delete'), style: 'destructive', onPress: () => deleteCategory(cat.id) },
-                    { text: t('misc.cancel'), style: 'cancel' },
-                  ])
-                }
+                onPress={() => openEditModal(cat)}
                 activeOpacity={0.8}
                 className="bg-white rounded-2xl p-4 mb-3 mx-4"
                 style={{ shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 }}
@@ -138,9 +148,9 @@ export default function BudgetScreen() {
                   </View>
                   <View
                     className="rounded-lg px-2 py-1"
-                    style={{ backgroundColor: over ? '#fee2e2' : '#f0fdf4' }}
+                    style={{ backgroundColor: over ? '#ef4444' : '#f0fdf4' }}
                   >
-                    <Text className="text-xs font-bold" style={{ color: over ? '#ef4444' : '#16a34a' }}>
+                    <Text className="text-xs font-bold" style={{ color: over ? '#fff' : '#16a34a' }}>
                       {over ? t('budget.overBudget') : format(remaining)}
                     </Text>
                   </View>
@@ -214,21 +224,57 @@ export default function BudgetScreen() {
         </Modal>
       )}
 
-      {/* Edit Limit Sheet */}
+      {/* Edit Category Sheet */}
       {!!editingCategory && (
         <Modal visible animationType="slide" transparent presentationStyle="pageSheet">
           <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} className="flex-1">
             <View className="flex-1 justify-end">
               <View className="bg-white rounded-t-3xl pt-3 pb-10 px-5">
                 <View className="w-10 h-1 bg-slate-300 rounded-full self-center mb-4" />
-                <Text className="text-xl font-bold text-slate-800 mb-4">
-                  {t('budget.editTitle')}{editingCategory ? ` — ${editingCategory.name}` : ''}
-                </Text>
-                <AmountInput value={newLimit} onChangeText={setNewLimit} label={t('budget.limit')} autoFocus />
-                <View className="flex-row gap-3 mt-2">
-                  <Button label={t('misc.cancel')} variant="secondary" onPress={() => setEditingCategory(null)} style={{ flex: 1 }} />
-                  <Button label={t('misc.save')} variant="primary" onPress={handleUpdateLimit} style={{ flex: 1 }} />
-                </View>
+
+                {confirmingDelete ? (
+                  <>
+                    <Text className="text-xl font-bold text-slate-800 mb-2" style={{ textAlign }}>
+                      {t('misc.delete')} "{editingCategory.name}"?
+                    </Text>
+                    <Text className="text-slate-500 text-sm mb-6" style={{ textAlign }}>
+                      {t('budget.deleteConfirm')}
+                    </Text>
+                    <View className="flex-row gap-3">
+                      <Button label={t('misc.cancel')} variant="secondary" onPress={() => setConfirmingDelete(false)} style={{ flex: 1 }} />
+                      <Button label={t('misc.delete')} variant="danger" onPress={() => { deleteCategory(editingCategory.id); closeEditModal(); }} style={{ flex: 1 }} />
+                    </View>
+                  </>
+                ) : (
+                  <>
+                    <Text className="text-xl font-bold text-slate-800 mb-4" style={{ textAlign }}>
+                      {t('budget.editTitle')}
+                    </Text>
+
+                    <Text className="text-sm font-medium text-slate-600 mb-1">{t('budget.name')}</Text>
+                    <TextInput
+                      value={newName}
+                      onChangeText={setNewName}
+                      placeholder={t('budget.namePlaceholder')}
+                      placeholderTextColor="#94a3b8"
+                      className="border border-slate-200 rounded-xl px-3 py-2 bg-slate-50 text-slate-800 mb-3"
+                    />
+
+                    <AmountInput value={newLimit} onChangeText={setNewLimit} label={t('budget.limit')} />
+
+                    <View className="flex-row gap-3 mt-2">
+                      <Button label={t('misc.cancel')} variant="secondary" onPress={closeEditModal} style={{ flex: 1 }} />
+                      <Button label={t('misc.save')} variant="primary" onPress={handleSaveCategory} style={{ flex: 1 }} />
+                    </View>
+
+                    <TouchableOpacity
+                      onPress={() => setConfirmingDelete(true)}
+                      className="mt-4 py-3 items-center"
+                    >
+                      <Text className="text-red-500 font-medium text-sm">{t('misc.delete')} "{editingCategory.name}"</Text>
+                    </TouchableOpacity>
+                  </>
+                )}
               </View>
             </View>
           </KeyboardAvoidingView>

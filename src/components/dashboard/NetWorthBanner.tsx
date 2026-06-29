@@ -44,7 +44,7 @@ export function CFSBanner() {
         </Text>
         <Text
           className="font-extrabold text-4xl text-center mt-1 mb-4"
-          style={{ color: isNegative ? '#fca5a5' : '#fff', letterSpacing: -1 }}
+          style={{ color: isNegative ? '#ef4444' : '#fff', letterSpacing: -1 }}
         >
           {format(summary.cfs)}
         </Text>
