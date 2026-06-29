@@ -61,11 +61,12 @@ create table public.transactions (
 );
 
 -- ─── Helper: current user's household ────────────────────────────────────────
--- Deterministic: if a user somehow belongs to more than one household (e.g. an
--- empty auto-created household left behind before joining another via invite
--- code), prefer the most recently joined one. Without an explicit ORDER BY the
--- `limit 1` is non-deterministic and can lock onto the wrong (empty) household,
--- making every RLS-scoped query return zero rows.
+-- Deterministic and data-aware: if a user somehow belongs to more than one
+-- household (e.g. an empty household left behind by a stray signup before they
+-- joined another via invite code), prefer the household that actually holds
+-- data, then break ties by most recently joined. Without an explicit ORDER BY
+-- the `limit 1` is non-deterministic and can lock onto the wrong (empty)
+-- household, making every RLS-scoped query return zero rows.
 create or replace function public.my_household_id()
 returns uuid
 language sql
@@ -76,7 +77,6 @@ as $$
   select household_id
   from public.household_members
   where user_id = auth.uid()
-  order by joined_at desc, household_id
   limit 1;
 $$;
 
