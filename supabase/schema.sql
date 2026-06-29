@@ -74,15 +74,9 @@ stable
 security definer
 set search_path = public
 as $$
-  select hm.household_id
-  from public.household_members hm
-  where hm.user_id = auth.uid()
-  order by
-    (exists (select 1 from public.categories   c where c.household_id = hm.household_id)
-     or exists (select 1 from public.envelopes    e where e.household_id = hm.household_id)
-     or exists (select 1 from public.transactions t where t.household_id = hm.household_id)) desc,
-    hm.joined_at desc,
-    hm.household_id
+  select household_id
+  from public.household_members
+  where user_id = auth.uid()
   limit 1;
 $$;
 
