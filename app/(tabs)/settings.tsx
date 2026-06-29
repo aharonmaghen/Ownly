@@ -281,52 +281,54 @@ export default function SettingsScreen() {
         </View>
       </ScrollView>
 
-      {/* Reset confirmation modal */}
-      <Modal visible={showResetConfirm} transparent animationType="fade">
-        <View
-          className="flex-1 justify-center items-center"
-          style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}
-        >
+      {/* Reset confirmation modal — only mounted when visible to avoid touch interception */}
+      {showResetConfirm && (
+        <Modal visible transparent animationType="fade">
           <View
-            className="bg-white rounded-3xl mx-6 p-6"
-            style={{ shadowColor: '#000', shadowOpacity: 0.25, shadowRadius: 24, elevation: 12 }}
+            className="flex-1 justify-center items-center"
+            style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}
           >
-            <View className="w-14 h-14 rounded-full bg-red-50 items-center justify-center self-center mb-4">
-              <Ionicons name="warning" size={28} color="#ef4444" />
-            </View>
-            <Text className="text-slate-800 font-bold text-lg text-center mb-2">
-              {t('settings.eraseConfirmTitle')}
-            </Text>
-            <Text className="text-slate-500 text-sm text-center mb-1">
-              {t('settings.eraseConfirmSub')}
-            </Text>
-            <Text className="text-slate-500 text-sm text-center mb-4">
-              {t('settings.eraseConfirmItems')}
-            </Text>
-            <View className="bg-red-50 rounded-xl px-4 py-2.5 mb-6">
-              <Text className="text-red-600 text-xs font-semibold text-center">
-                {t('settings.eraseWarning')}
+            <View
+              className="bg-white rounded-3xl mx-6 p-6"
+              style={{ shadowColor: '#000', shadowOpacity: 0.25, shadowRadius: 24, elevation: 12 }}
+            >
+              <View className="w-14 h-14 rounded-full bg-red-50 items-center justify-center self-center mb-4">
+                <Ionicons name="warning" size={28} color="#ef4444" />
+              </View>
+              <Text className="text-slate-800 font-bold text-lg text-center mb-2">
+                {t('settings.eraseConfirmTitle')}
               </Text>
-            </View>
-            <View className="flex-row gap-3">
-              <TouchableOpacity
-                onPress={handleReset}
-                className="flex-1 py-3 rounded-2xl items-center bg-red-500"
-                activeOpacity={0.8}
-              >
-                <Text className="text-white font-bold text-sm">{t('settings.eraseConfirmBtn')}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => setShowResetConfirm(false)}
-                className="flex-1 py-3 rounded-2xl items-center bg-slate-100"
-                activeOpacity={0.8}
-              >
-                <Text className="text-slate-600 font-bold text-sm">{t('misc.cancel')}</Text>
-              </TouchableOpacity>
+              <Text className="text-slate-500 text-sm text-center mb-1">
+                {t('settings.eraseConfirmSub')}
+              </Text>
+              <Text className="text-slate-500 text-sm text-center mb-4">
+                {t('settings.eraseConfirmItems')}
+              </Text>
+              <View className="bg-red-50 rounded-xl px-4 py-2.5 mb-6">
+                <Text className="text-red-600 text-xs font-semibold text-center">
+                  {t('settings.eraseWarning')}
+                </Text>
+              </View>
+              <View className="flex-row gap-3">
+                <TouchableOpacity
+                  onPress={handleReset}
+                  className="flex-1 py-3 rounded-2xl items-center bg-red-500"
+                  activeOpacity={0.8}
+                >
+                  <Text className="text-white font-bold text-sm">{t('settings.eraseConfirmBtn')}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => setShowResetConfirm(false)}
+                  className="flex-1 py-3 rounded-2xl items-center bg-slate-100"
+                  activeOpacity={0.8}
+                >
+                  <Text className="text-slate-600 font-bold text-sm">{t('misc.cancel')}</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
-        </View>
-      </Modal>
+        </Modal>
+      )}
     </SafeAreaView>
   );
 }
