@@ -131,11 +131,18 @@ async function fetchHousehold(): Promise<Household | null> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
 
+  // Pick the same household the DB's my_household_id() resolves to (most
+  // recently joined). Must stay in sync with that function, otherwise the
+  // client would load a household whose data RLS won't return. A user may have
+  // more than one membership row, so never use .single() here.
   const { data: member } = await supabase
     .from('household_members')
     .select('household_id')
     .eq('user_id', user.id)
-    .single();
+    .order('joined_at', { ascending: false })
+    .order('household_id', { ascending: true })
+    .limit(1)
+    .maybeSingle();
   if (!member) return null;
 
   const { data: hh } = await supabase
