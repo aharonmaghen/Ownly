@@ -1,4 +1,4 @@
-import React, { forwardRef } from 'react';
+import React, { forwardRef, useState } from 'react';
 import { TextInput, TextInputProps, View, Text } from 'react-native';
 import { useSettingsStore } from '../../store/settingsStore';
 import { useRTL } from '../../hooks/useRTL';
@@ -11,14 +11,22 @@ interface AmountInputProps extends Omit<TextInputProps, 'value' | 'onChangeText'
 }
 
 export const AmountInput = forwardRef<TextInput, AmountInputProps>(
-  ({ value, onChangeText, label, error, ...props }, ref) => {
+  ({ value, onChangeText, label, error, onFocus, ...props }, ref) => {
     const symbol = useSettingsStore((s) => s.settings.currencySymbol);
     const { isRTL, textAlign } = useRTL();
+    const [selection, setSelection] = useState<{ start: number; end: number } | undefined>();
 
     const handleChange = (text: string) => {
       // Allow only digits and one decimal point
       const cleaned = text.replace(/[^0-9.]/g, '').replace(/(\..*)\./g, '$1');
       onChangeText(cleaned);
+    };
+
+    const handleFocus = (e: any) => {
+      const len = value.length;
+      setSelection({ start: len, end: len });
+      setTimeout(() => setSelection(undefined), 50);
+      onFocus?.(e);
     };
 
     return (
@@ -36,6 +44,8 @@ export const AmountInput = forwardRef<TextInput, AmountInputProps>(
             ref={ref}
             value={value}
             onChangeText={handleChange}
+            onFocus={handleFocus}
+            selection={selection}
             keyboardType="decimal-pad"
             placeholderTextColor="#94a3b8"
             style={{
