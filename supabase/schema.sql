@@ -61,6 +61,11 @@ create table public.transactions (
 );
 
 -- ─── Helper: current user's household ────────────────────────────────────────
+-- Deterministic: if a user somehow belongs to more than one household (e.g. an
+-- empty auto-created household left behind before joining another via invite
+-- code), prefer the most recently joined one. Without an explicit ORDER BY the
+-- `limit 1` is non-deterministic and can lock onto the wrong (empty) household,
+-- making every RLS-scoped query return zero rows.
 create or replace function public.my_household_id()
 returns uuid
 language sql
@@ -71,6 +76,7 @@ as $$
   select household_id
   from public.household_members
   where user_id = auth.uid()
+  order by joined_at desc, household_id
   limit 1;
 $$;
 
@@ -148,10 +154,13 @@ create policy "household members can update"
   on public.households for update
   using (id = public.my_household_id());
 
--- household_members: members can read their own household's members
+-- household_members: a user can always read their OWN membership rows, plus the
+-- other members of the household they're currently scoped to. Scoping the read
+-- to `household_id = my_household_id()` alone hid a user's other membership rows
+-- from themselves, which masked the wrong-household bug above.
 create policy "members can read household_members"
   on public.household_members for select
-  using (household_id = public.my_household_id());
+  using (user_id = auth.uid() or household_id = public.my_household_id());
 
 -- household_members: users can insert themselves (join)
 create policy "users can join a household"
