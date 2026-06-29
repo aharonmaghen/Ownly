@@ -115,7 +115,7 @@ export default function BudgetScreen() {
             return (
               <TouchableOpacity
                 key={cat.id}
-                onPress={() => { setEditingCategory(cat); setNewLimit(String(cat.monthlyLimit)); }}
+                onPress={() => { setEditingCategory(cat); setNewLimit(cat.monthlyLimit === 0 ? '' : String(cat.monthlyLimit)); }}
                 onLongPress={() =>
                   Alert.alert(cat.name, undefined, [
                     { text: t('misc.delete'), style: 'destructive', onPress: () => deleteCategory(cat.id) },

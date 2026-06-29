@@ -37,7 +37,6 @@ export const AmountInput = forwardRef<TextInput, AmountInputProps>(
             value={value}
             onChangeText={handleChange}
             keyboardType="decimal-pad"
-            placeholder="0.00"
             placeholderTextColor="#94a3b8"
             style={{
               flex: 1,
