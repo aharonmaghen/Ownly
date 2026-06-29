@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
+import { useRouter } from 'expo-router';
 import { useSettingsStore } from '../../src/store/settingsStore';
 import { useBudgetStore } from '../../src/store/budgetStore';
 import { useAuthStore } from '../../src/store/authStore';
@@ -27,6 +28,7 @@ export default function SettingsScreen() {
   const { t } = useTranslation();
   const { row, textAlign } = useRTL();
   const screenHeight = useScreenHeight();
+  const router = useRouter();
   const { settings, setCurrency, setLanguage } = useSettingsStore();
   const { resetAll } = useBudgetStore();
   const { user, household, signOut, updateHouseholdName } = useAuthStore();
@@ -66,7 +68,14 @@ export default function SettingsScreen() {
   const handleSignOut = () => {
     Alert.alert('Sign out', 'Are you sure you want to sign out?', [
       { text: t('misc.cancel'), style: 'cancel' },
-      { text: 'Sign out', style: 'destructive', onPress: signOut },
+      {
+        text: 'Sign out',
+        style: 'destructive',
+        onPress: async () => {
+          await signOut();
+          router.replace('/(auth)/login');
+        },
+      },
     ]);
   };
 
