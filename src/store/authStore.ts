@@ -60,11 +60,9 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
       // never results in an orphaned account.
       let householdToJoin: { id: string; name: string; invite_code: string } | null = null;
       if (inviteCode) {
-        const { data: hh, error: hhErr } = await supabase
-          .from('households')
-          .select('id, name, invite_code')
-          .eq('invite_code', inviteCode.toUpperCase().trim())
-          .single();
+        const { data: rows, error: hhErr } = await supabase
+          .rpc('get_household_by_invite_code', { code: inviteCode });
+        const hh = rows?.[0] ?? null;
         if (hhErr || !hh) {
           set({ loading: false, error: 'Invalid invite code' });
           return;

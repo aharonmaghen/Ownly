@@ -74,6 +74,19 @@ as $$
   limit 1;
 $$;
 
+-- ─── Invite-code lookup (runs as definer to bypass RLS for unauthenticated users) ──
+create or replace function public.get_household_by_invite_code(code text)
+returns table(id uuid, name text, invite_code text)
+language sql
+security definer
+set search_path = public
+as $$
+  select id, name, invite_code
+  from public.households
+  where invite_code = upper(trim(code))
+  limit 1;
+$$;
+
 -- ─── RLS ──────────────────────────────────────────────────────────────────────
 alter table public.households        enable row level security;
 alter table public.household_members enable row level security;
