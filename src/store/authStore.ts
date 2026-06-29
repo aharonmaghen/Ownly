@@ -65,9 +65,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
       if (error) throw error;
       if (!data.user) throw new Error('Sign up failed');
 
-      // complete_household_signup is SECURITY DEFINER so it works even when
-      // data.session is null (email-confirmation enabled) and bypasses RLS.
-      const { data: hhRaw, error: hhErr } = await supabase.rpc(
+      const { error: hhErr } = await supabase.rpc(
         'complete_household_signup',
         { p_invite_code: inviteCode ?? null },
       );
@@ -82,10 +80,14 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
         return;
       }
 
+      // Fetch household directly from the DB — more reliable than parsing the
+      // RPC's jsonb return value, which Supabase clients can wrap inconsistently.
+      const household = await fetchHousehold();
+
       set({
         session:   data.session,
         user:      data.user,
-        household: { id: hhRaw.id, name: hhRaw.name, inviteCode: hhRaw.invite_code },
+        household,
         loading:   false,
       });
     } catch (e: any) {
@@ -106,7 +108,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
   },
 
   signOut: async () => {
-    await supabase.auth.signOut();
+    try { await supabase.auth.signOut(); } catch {}
     set({ session: null, user: null, household: null });
   },
 
