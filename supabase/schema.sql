@@ -74,18 +74,62 @@ as $$
   limit 1;
 $$;
 
--- ─── Invite-code lookup (runs as definer to bypass RLS for unauthenticated users) ──
-create or replace function public.get_household_by_invite_code(code text)
-returns table(id uuid, name text, invite_code text)
-language sql
+-- ─── Signup helper: atomically creates or joins a household ──────────────────
+-- Runs as SECURITY DEFINER so it bypasses RLS and works even before the user
+-- has an active session (email-confirmation flow included).
+-- Callable by anon so it works immediately after supabase.auth.signUp().
+create or replace function public.complete_household_signup(
+  p_invite_code text default null
+)
+returns jsonb
+language plpgsql
 security definer
 set search_path = public
 as $$
-  select id, name, invite_code
-  from public.households
-  where invite_code = upper(trim(code))
-  limit 1;
+declare
+  v_user_id     uuid := auth.uid();
+  v_hh_id       uuid;
+  v_hh_name     text;
+  v_invite_code text;
+begin
+  if v_user_id is null then
+    raise exception 'not authenticated';
+  end if;
+
+  if p_invite_code is not null and trim(p_invite_code) <> '' then
+    -- Join an existing household by invite code
+    select id, name, invite_code
+      into v_hh_id, v_hh_name, v_invite_code
+      from households
+     where invite_code = upper(trim(p_invite_code))
+     limit 1;
+    if v_hh_id is null then
+      raise exception 'Invalid invite code';
+    end if;
+    insert into household_members (household_id, user_id, role)
+    values (v_hh_id, v_user_id, 'member')
+    on conflict do nothing;
+  else
+    -- Create a brand-new household for this user
+    insert into households (name)
+    values ('My Household')
+    returning id, name, invite_code
+    into v_hh_id, v_hh_name, v_invite_code;
+    insert into household_members (household_id, user_id, role)
+    values (v_hh_id, v_user_id, 'owner');
+  end if;
+
+  return jsonb_build_object(
+    'id',          v_hh_id,
+    'name',        v_hh_name,
+    'invite_code', v_invite_code
+  );
+end;
 $$;
+
+-- Only authenticated users can call this (requires email confirmation to be disabled in Supabase)
+revoke execute on function public.complete_household_signup(text) from anon;
+grant  execute on function public.complete_household_signup(text) to authenticated;
 
 -- ─── RLS ──────────────────────────────────────────────────────────────────────
 alter table public.households        enable row level security;

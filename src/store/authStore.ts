@@ -15,12 +15,12 @@ interface AuthStore {
   loading:    boolean;
   error:      string | null;
 
-  initialize():                                                   Promise<void>;
-  signUp(email: string, password: string, inviteCode?: string):   Promise<void>;
-  signIn(email: string, password: string):                        Promise<void>;
-  signOut():                                                       Promise<void>;
-  updateHouseholdName(name: string):                              Promise<void>;
-  clearError():                                                    void;
+  initialize():                                                 Promise<void>;
+  signUp(email: string, password: string, inviteCode?: string): Promise<void>;
+  signIn(email: string, password: string):                      Promise<void>;
+  signOut():                                                    Promise<void>;
+  updateHouseholdName(name: string):                            Promise<void>;
+  clearError():                                                 void;
 }
 
 export const useAuthStore = create<AuthStore>((set, get) => ({
@@ -44,33 +44,19 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
       set({ loading: false });
     }
 
-    supabase.auth.onAuthStateChange(async (_event, session) => {
-      if (session) {
-        const household = await fetchHousehold();
-        set({ session, user: session.user, household });
-      } else {
+    // Only sync auth tokens here — household is managed by each explicit action
+    // to avoid racing with signUp / signIn which set household themselves.
+    supabase.auth.onAuthStateChange((_event, session) => {
+      if (!session) {
         set({ session: null, user: null, household: null });
       }
+      // session updates (token refresh etc.) are handled; household stays as-is
     });
   },
 
   signUp: async (email, password, inviteCode) => {
     set({ loading: true, error: null });
     try {
-      // Validate invite code before creating the auth user so an invalid code
-      // never results in an orphaned account.
-      let householdToJoin: { id: string; name: string; invite_code: string } | null = null;
-      if (inviteCode) {
-        const { data: rows, error: hhErr } = await supabase
-          .rpc('get_household_by_invite_code', { code: inviteCode });
-        const hh = rows?.[0] ?? null;
-        if (hhErr || !hh) {
-          set({ loading: false, error: 'Invalid invite code' });
-          return;
-        }
-        householdToJoin = hh;
-      }
-
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -79,39 +65,29 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
       if (error) throw error;
       if (!data.user) throw new Error('Sign up failed');
 
-      if (householdToJoin) {
-        const { error: joinErr } = await supabase
-          .from('household_members')
-          .insert({ household_id: householdToJoin.id, user_id: data.user.id, role: 'member' });
-        if (joinErr) throw joinErr;
+      // complete_household_signup is SECURITY DEFINER so it works even when
+      // data.session is null (email-confirmation enabled) and bypasses RLS.
+      const { data: hhRaw, error: hhErr } = await supabase.rpc(
+        'complete_household_signup',
+        { p_invite_code: inviteCode ?? null },
+      );
 
+      if (hhErr) {
         set({
-          session:   data.session,
-          user:      data.user,
-          household: { id: householdToJoin.id, name: householdToJoin.name, inviteCode: householdToJoin.invite_code },
-          loading:   false,
+          loading: false,
+          error: hhErr.message.includes('Invalid invite code')
+            ? 'Invalid invite code'
+            : hhErr.message ?? 'Sign up failed',
         });
-      } else {
-        // Create new household
-        const { data: hh, error: hhErr } = await supabase
-          .from('households')
-          .insert({ name: 'My Household' })
-          .select()
-          .single();
-        if (hhErr || !hh) throw hhErr ?? new Error('Failed to create household');
-
-        const { error: memberErr } = await supabase
-          .from('household_members')
-          .insert({ household_id: hh.id, user_id: data.user.id, role: 'owner' });
-        if (memberErr) throw memberErr;
-
-        set({
-          session:   data.session,
-          user:      data.user,
-          household: { id: hh.id, name: hh.name, inviteCode: hh.invite_code },
-          loading:   false,
-        });
+        return;
       }
+
+      set({
+        session:   data.session,
+        user:      data.user,
+        household: { id: hhRaw.id, name: hhRaw.name, inviteCode: hhRaw.invite_code },
+        loading:   false,
+      });
     } catch (e: any) {
       set({ loading: false, error: e.message ?? 'Sign up failed' });
     }
