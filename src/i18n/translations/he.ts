@@ -90,6 +90,8 @@ export default {
     hebrew:             'עברית',
     usd:                'דולר אמריקאי — USD',
     ils:                'שקל ישראלי — ILS',
+    account:            'חשבון',
+    email:              'אימייל',
     household:          'משק בית',
     householdName:      'שם משק הבית',
     inviteCode:         'קוד הזמנה — לחץ להעתקה',

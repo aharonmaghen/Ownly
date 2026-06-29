@@ -15,11 +15,12 @@ interface AuthStore {
   loading:    boolean;
   error:      string | null;
 
-  initialize():                                       Promise<void>;
-  signUp(email: string, password: string, inviteCode?: string): Promise<void>;
-  signIn(email: string, password: string):            Promise<void>;
-  signOut():                                          Promise<void>;
-  clearError():                                       void;
+  initialize():                                                   Promise<void>;
+  signUp(email: string, password: string, inviteCode?: string):   Promise<void>;
+  signIn(email: string, password: string):                        Promise<void>;
+  signOut():                                                       Promise<void>;
+  updateHouseholdName(name: string):                              Promise<void>;
+  clearError():                                                    void;
 }
 
 export const useAuthStore = create<AuthStore>((set, get) => ({
@@ -131,6 +132,18 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
   signOut: async () => {
     await supabase.auth.signOut();
     set({ session: null, user: null, household: null });
+  },
+
+  updateHouseholdName: async (name: string) => {
+    const { household } = get();
+    if (!household) return;
+    const { error } = await supabase
+      .from('households')
+      .update({ name })
+      .eq('id', household.id);
+    if (!error) {
+      set({ household: { ...household, name } });
+    }
   },
 
   clearError: () => set({ error: null }),

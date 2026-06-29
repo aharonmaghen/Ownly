@@ -99,6 +99,11 @@ create policy "household members can read"
   on public.households for select
   using (id = public.my_household_id());
 
+-- households: members can update their own household (e.g. rename)
+create policy "household members can update"
+  on public.households for update
+  using (id = public.my_household_id());
+
 -- household_members: members can read their own household's members
 create policy "members can read household_members"
   on public.household_members for select

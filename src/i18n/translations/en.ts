@@ -90,6 +90,8 @@ export default {
     hebrew:             'עברית',
     usd:                'USD — US Dollar',
     ils:                'ILS — Israeli Shekel',
+    account:            'Account',
+    email:              'Email',
     household:          'Household',
     householdName:      'Household Name',
     inviteCode:         'Invite Code — tap to copy',

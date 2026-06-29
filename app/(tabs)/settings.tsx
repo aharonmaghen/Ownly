@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import {
-  View, Text, TouchableOpacity, SafeAreaView,
+  View, Text, TextInput, TouchableOpacity, SafeAreaView,
   ScrollView, Modal, Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -29,9 +29,11 @@ export default function SettingsScreen() {
   const screenHeight = useScreenHeight();
   const { settings, setCurrency, setLanguage } = useSettingsStore();
   const { resetAll } = useBudgetStore();
-  const { household, signOut } = useAuthStore();
+  const { user, household, signOut, updateHouseholdName } = useAuthStore();
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [editingName, setEditingName] = useState(false);
+  const [nameValue, setNameValue] = useState('');
 
   const handleReset = () => {
     resetAll();
@@ -43,6 +45,22 @@ export default function SettingsScreen() {
     await Clipboard.setStringAsync(household.inviteCode);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleStartEditName = () => {
+    setNameValue(household?.name ?? '');
+    setEditingName(true);
+  };
+
+  const handleSaveName = async () => {
+    const trimmed = nameValue.trim();
+    if (trimmed) await updateHouseholdName(trimmed);
+    setEditingName(false);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingName(false);
+    setNameValue('');
   };
 
   const handleSignOut = () => {
@@ -65,20 +83,76 @@ export default function SettingsScreen() {
 
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 40 }}>
 
+        {/* Account */}
+        {user && (
+          <>
+            <SectionHeader label={t('settings.account')} />
+            <View className="bg-white mx-4 rounded-2xl overflow-hidden" style={{ shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 6, elevation: 1 }}>
+              <View className="px-4 py-4" style={{ flexDirection: row }}>
+                <View className="w-9 h-9 rounded-full bg-brand-50 items-center justify-center mr-3">
+                  <Ionicons name="person-outline" size={18} color="#0284c7" />
+                </View>
+                <View className="flex-1">
+                  <Text className="text-slate-500 text-xs mb-0.5" style={{ textAlign }}>{t('settings.email')}</Text>
+                  <Text className="text-slate-800 font-medium" style={{ textAlign }} numberOfLines={1}>{user.email}</Text>
+                </View>
+              </View>
+            </View>
+          </>
+        )}
+
         {/* Household */}
         {household && (
           <>
             <SectionHeader label={t('settings.household')} />
             <View className="bg-white mx-4 rounded-2xl overflow-hidden" style={{ shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 6, elevation: 1 }}>
-              <View className="px-4 py-4 border-b border-slate-100" style={{ flexDirection: row }}>
-                <View className="w-9 h-9 rounded-full bg-brand-50 items-center justify-center mr-3">
-                  <Ionicons name="home-outline" size={18} color="#0284c7" />
+
+              {/* Household name — editable */}
+              {editingName ? (
+                <View className="px-4 py-4 border-b border-slate-100" style={{ flexDirection: row, alignItems: 'center' }}>
+                  <View className="w-9 h-9 rounded-full bg-brand-50 items-center justify-center mr-3">
+                    <Ionicons name="home-outline" size={18} color="#0284c7" />
+                  </View>
+                  <View className="flex-1">
+                    <Text className="text-slate-500 text-xs mb-0.5" style={{ textAlign }}>{t('settings.householdName')}</Text>
+                    <TextInput
+                      value={nameValue}
+                      onChangeText={setNameValue}
+                      autoFocus
+                      returnKeyType="done"
+                      onSubmitEditing={handleSaveName}
+                      className="text-slate-800 font-semibold border-b border-brand-400 pb-0.5"
+                      style={{ textAlign }}
+                    />
+                  </View>
+                  <View style={{ flexDirection: 'row', gap: 6, marginLeft: 8 }}>
+                    <TouchableOpacity onPress={handleSaveName} hitSlop={8}>
+                      <Ionicons name="checkmark-circle" size={24} color="#0284c7" />
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={handleCancelEdit} hitSlop={8}>
+                      <Ionicons name="close-circle" size={24} color="#94a3b8" />
+                    </TouchableOpacity>
+                  </View>
                 </View>
-                <View className="flex-1">
-                  <Text className="text-slate-500 text-xs mb-0.5">{t('settings.householdName')}</Text>
-                  <Text className="text-slate-800 font-semibold">{household.name}</Text>
-                </View>
-              </View>
+              ) : (
+                <TouchableOpacity
+                  onPress={handleStartEditName}
+                  className="px-4 py-4 border-b border-slate-100"
+                  style={{ flexDirection: row, alignItems: 'center' }}
+                  activeOpacity={0.7}
+                >
+                  <View className="w-9 h-9 rounded-full bg-brand-50 items-center justify-center mr-3">
+                    <Ionicons name="home-outline" size={18} color="#0284c7" />
+                  </View>
+                  <View className="flex-1">
+                    <Text className="text-slate-500 text-xs mb-0.5" style={{ textAlign }}>{t('settings.householdName')}</Text>
+                    <Text className="text-slate-800 font-semibold" style={{ textAlign }}>{household.name}</Text>
+                  </View>
+                  <Ionicons name="pencil-outline" size={18} color="#94a3b8" />
+                </TouchableOpacity>
+              )}
+
+              {/* Invite code */}
               <TouchableOpacity
                 onPress={handleCopyCode}
                 className="px-4 py-4 flex-row items-center"
@@ -89,8 +163,8 @@ export default function SettingsScreen() {
                   <Ionicons name="key-outline" size={18} color="#0284c7" />
                 </View>
                 <View className="flex-1">
-                  <Text className="text-slate-500 text-xs mb-0.5">{t('settings.inviteCode')}</Text>
-                  <Text className="text-slate-800 font-mono font-bold tracking-widest">{household.inviteCode}</Text>
+                  <Text className="text-slate-500 text-xs mb-0.5" style={{ textAlign }}>{t('settings.inviteCode')}</Text>
+                  <Text className="text-slate-800 font-mono font-bold tracking-widest" style={{ textAlign }}>{household.inviteCode}</Text>
                 </View>
                 <Ionicons
                   name={copied ? 'checkmark-circle' : 'copy-outline'}
